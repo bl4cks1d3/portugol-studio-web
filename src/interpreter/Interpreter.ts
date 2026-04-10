@@ -5,6 +5,7 @@ export class PortugolInterpreter {
   private state: InterpreterState;
   private onOutput: (text: string) => void;
   private onInputRequired: (prompt: string) => Promise<string>;
+  private lastEscrevaContent: string | null = null;
 
   constructor(
     onOutput: (text: string) => void,
@@ -28,6 +29,7 @@ export class PortugolInterpreter {
 
   public async run(code: string) {
     this.state = this.resetState();
+    this.lastEscrevaContent = null;
     const lines = code.split('\n').map(l => l.trim());
     
     try {
@@ -323,13 +325,17 @@ export class PortugolInterpreter {
     }).join(' ');
     
     this.onOutput(output);
+    this.lastEscrevaContent = output;
   }
 
   private async handleLeia(line: string) {
     const varName = line.match(/leia\((.*)\);?/i)?.[1].trim();
     if (!varName) return;
 
-    const input = await this.onInputRequired(`Digite o valor para ${varName}:`);
+    const prompt = this.lastEscrevaContent || `Digite o valor para ${varName}:`;
+    const input = await this.onInputRequired(prompt);
+    this.lastEscrevaContent = null; // Reset after use
+
     const variable = this.state.variables.get(varName);
     if (!variable) throw new Error(`Variável não declarada: ${varName}`);
 

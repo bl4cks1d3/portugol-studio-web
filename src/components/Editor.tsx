@@ -92,7 +92,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ code, onChange, syntaxEr
     <div className="relative h-full font-mono text-sm overflow-auto bg-[#1e1e1e] rounded-lg border border-white/10 shadow-2xl flex">
       {/* Line Numbers */}
       <div 
-        className="text-right bg-[#1a1a1a] border-r border-white/5 text-gray-600 select-none min-w-[3rem] md:min-w-[3.5rem]"
+        className="text-right bg-[#1a1a1a] border-r border-white/5 text-gray-600 select-none min-w-[3rem] md:min-w-[3.5rem] z-10"
         style={{ 
           paddingTop: padding,
           paddingBottom: padding,
@@ -127,13 +127,48 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ code, onChange, syntaxEr
       </div>
       
       <div className="flex-1 relative">
+        {/* Indent Guides Layer */}
+        <div 
+          className="absolute inset-0 pointer-events-none select-none z-0"
+          style={{ 
+            padding: padding,
+            fontFamily: '"JetBrains Mono", "Fira Code", monospace',
+            fontSize: fontSize,
+            lineHeight: '1.5'
+          }}
+        >
+          {(() => {
+            const lines = code.split('\n');
+            const lineIndents = lines.map(l => l.trim().length === 0 ? -1 : (l.match(/^\s*/)?.[0].length || 0));
+            
+            return lines.map((_, i) => {
+              let indent = lineIndents[i];
+              if (indent === -1) {
+                let prev = 0;
+                for (let k = i - 1; k >= 0; k--) { if (lineIndents[k] !== -1) { prev = lineIndents[k]; break; } }
+                let next = 0;
+                for (let k = i + 1; k < lineIndents.length; k++) { if (lineIndents[k] !== -1) { next = lineIndents[k]; break; } }
+                indent = Math.min(prev, next);
+              }
+              const levels = Math.floor(indent / 2);
+              return (
+                <div key={i} className="h-[1.5em] flex">
+                  {Array.from({ length: levels }).map((_, j) => (
+                    <div key={j} className="border-l border-white/[0.05] h-full" style={{ width: '2ch' }} />
+                  ))}
+                </div>
+              );
+            });
+          })()}
+        </div>
+
         <Editor
           value={code}
           onValueChange={handleValueChange}
           onKeyDown={handleKeyDown}
           highlight={(code) => Prism.highlight(code, Prism.languages.portugol, 'portugol')}
           padding={padding}
-          className="min-h-full"
+          className="min-h-full relative z-10"
           style={{
             fontFamily: '"JetBrains Mono", "Fira Code", monospace',
             fontSize: fontSize,

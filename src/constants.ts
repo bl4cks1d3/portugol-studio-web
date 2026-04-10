@@ -1,4 +1,6 @@
 
+import { BOOK_EXERCISES } from './book-exercises';
+
 export interface Example {
   id: string;
   title: string;
@@ -9,6 +11,7 @@ export interface Example {
 }
 
 export const CATEGORIZED_EXAMPLES: { [category: string]: Example[] } = {
+  ...BOOK_EXERCISES,
   "Tutorial de Estrutura": [
     {
       id: "tutorial-basico",

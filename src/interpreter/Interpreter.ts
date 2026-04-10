@@ -48,38 +48,39 @@ export class PortugolInterpreter {
       }
 
       try {
-        if (line.toLowerCase().startsWith('algoritmo')) {
+        const lowerLine = line.toLowerCase();
+        if (lowerLine.startsWith('algoritmo')) {
           // Skip header
-        } else if (line.toLowerCase().startsWith('fimalgoritmo')) {
+        } else if (lowerLine.startsWith('fimalgoritmo')) {
           break;
-        } else if (line.toLowerCase().startsWith('declare')) {
+        } else if (lowerLine.startsWith('declare')) {
           this.handleDeclaration(line);
-        } else if (line.includes('<-') || line.includes('++') || line.includes('--')) {
-          this.handleAssignment(line);
-        } else if (line.toLowerCase().startsWith('escreva')) {
+        } else if (lowerLine.startsWith('escreva')) {
           this.handleEscreva(line);
-        } else if (line.toLowerCase().startsWith('leia')) {
+        } else if (lowerLine.startsWith('leia')) {
           await this.handleLeia(line);
-        } else if (line.toLowerCase().startsWith('se')) {
+        } else if (lowerLine.startsWith('se')) {
           const { nextIndex } = await this.handleSe(lines, i);
           i = nextIndex;
           continue;
-        } else if (line.toLowerCase().startsWith('enquanto')) {
+        } else if (lowerLine.startsWith('enquanto')) {
           const { nextIndex } = await this.handleEnquanto(lines, i);
           i = nextIndex;
           continue;
-        } else if (line.toLowerCase().startsWith('para')) {
+        } else if (lowerLine.startsWith('para')) {
           const { nextIndex } = await this.handlePara(lines, i);
           i = nextIndex;
           continue;
-        } else if (line.toLowerCase().startsWith('faca')) {
+        } else if (lowerLine.startsWith('faca')) {
           const { nextIndex } = await this.handleFacaEnquanto(lines, i);
           i = nextIndex;
           continue;
-        } else if (line.toLowerCase().startsWith('escolha')) {
+        } else if (lowerLine.startsWith('escolha')) {
           const { nextIndex } = await this.handleEscolha(lines, i);
           i = nextIndex;
           continue;
+        } else if (line.includes('<-') || line.includes('++') || line.includes('--')) {
+          this.handleAssignment(line);
         }
       } catch (error: any) {
         throw new Error(`Erro na linha ${i + 1}: ${error.message}`);
@@ -90,25 +91,64 @@ export class PortugolInterpreter {
   }
 
   private async handlePara(lines: string[], startIndex: number): Promise<{ nextIndex: number }> {
-    const line = lines[startIndex];
-    // para(i <- 1; i <= 100; i <- i + 1)
-    const match = line.match(/para\s*\(([^;]+);([^;]+);([^)]+)\)/i);
-    if (!match) throw new Error(`Sintaxe 'para' inválida na linha ${startIndex + 1}`);
+    const line = lines[startIndex].trim();
+    
+    // Standard syntax: para (i <- 1; i <= 10; i <- i + 1)
+    const parenMatch = line.match(/para\s*\((.*)\)/i);
+    if (parenMatch) {
+      const header = parenMatch[1];
+      const parts = header.split(';');
+      if (parts.length === 3) {
+        const init = parts[0].trim();
+        const condition = parts[1].trim();
+        const increment = parts[2].trim();
+        return this.runParaLoop(init, condition, increment, lines, startIndex);
+      }
+    }
 
-    const init = match[1].trim();
-    const condition = match[2].trim();
-    const increment = match[3].replace(/;$/, '').trim();
+    // Alternative syntax: para i <- 1 ate 10 passo 1 faca
+    const altMatch = line.match(/para\s+(\w+)\s*<-\s*([^ ]+)\s+ate\s+([^ ]+)(?:\s+passo\s+([^ ]+))?/i);
+    if (altMatch) {
+      const varName = altMatch[1];
+      const startVal = altMatch[2];
+      const endVal = altMatch[3];
+      const step = altMatch[4] || "1";
+      
+      const init = `${varName} <- ${startVal}`;
+      const condition = `${varName} <= ${endVal}`;
+      const increment = `${varName} <- ${varName} + ${step}`;
+      
+      return this.runParaLoop(init, condition, increment, lines, startIndex);
+    }
 
+    throw new Error(`Sintaxe 'para' inválida na linha ${startIndex + 1}. Use o formato: para (i <- 1; i <= 10; i <- i + 1)`);
+  }
+
+  private async runParaLoop(init: string, condition: string, increment: string, lines: string[], startIndex: number) {
     const { block, endIndex } = this.findLoopBlock(lines, startIndex, 'fimpara');
 
     // Execute init
     if (init.includes('<-')) this.handleAssignment(init);
     else if (init.toLowerCase().startsWith('declare')) this.handleDeclaration(init);
 
+    let safetyCounter = 0;
+    const MAX_ITERATIONS = 10000;
+
     while (this.evaluateExpression(condition)) {
+      if (safetyCounter++ > MAX_ITERATIONS) {
+        throw new Error("Loop infinito detectado ou limite de execuções excedido.");
+      }
       await this.executeBlock(block);
       // Execute increment
-      this.handleAssignment(increment);
+      if (increment.includes('<-') || increment.includes('++') || increment.includes('--')) {
+        this.handleAssignment(increment);
+      } else {
+        // Fallback for simple increments like "i + 1"
+        const varName = init.split('<-')[0].trim();
+        const newVal = this.evaluateExpression(increment);
+        const variable = this.state.variables.get(varName);
+        if (variable) variable.value = newVal;
+      }
     }
 
     return { nextIndex: endIndex + 1 };
@@ -145,7 +185,7 @@ export class PortugolInterpreter {
         const casoMatch = l.match(/caso\s+(.*?):\s*(.*)/i);
         if (casoMatch) {
           const casoVal = this.evaluateExpression(casoMatch[1]);
-          if (casoVal === value) {
+          if (String(casoVal) === String(value)) {
             const sameLineCode = casoMatch[2].trim();
             if (sameLineCode) {
               await this.executeBlock([sameLineCode]);
@@ -157,6 +197,8 @@ export class PortugolInterpreter {
             break;
           }
         }
+      } else if (lLower.startsWith('caso contrario:')) {
+        // Skip for now, will handle after the loop if not found
       }
     }
 
@@ -357,6 +399,11 @@ export class PortugolInterpreter {
 
     // Handle Portugol specific operators and functions
     processed = processed
+      .replace(/\s+e\s+/gi, ' && ')
+      .replace(/\s+ou\s+/gi, ' || ')
+      .replace(/\s+nao\s+/gi, ' ! ')
+      .replace(/<>/g, '!=')
+      .replace(/([^<>!=])=([^<>!=])/g, '$1 == $2') // Replace single = with == if not part of comparison
       .replace(/&&/g, '&&')
       .replace(/\|\|/g, '||')
       .replace(/!/g, '!')

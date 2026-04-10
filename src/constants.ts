@@ -197,9 +197,9 @@ fimalgoritmo`
     },
     {
       id: "escolha-caso",
-      title: "Escolha-Caso",
+      title: "Escolha-Caso (Dias)",
       category: "Desvios Condicionais",
-      description: "Exemplo de uso da estrutura escolha.",
+      description: "Exemplo de uso da estrutura escolha para dias da semana.",
       code: `Algoritmo ExemploEscolha()
 declare dia inteiro;
 escreva("Digite o dia da semana (1-7):");
@@ -213,6 +213,35 @@ escolha(dia)
   caso 6: escreva("Sexta-feira");
   caso 7: escreva("Sábado");
   caso contrario: escreva("Dia inválido!");
+fimescolha
+fimalgoritmo`
+    },
+    {
+      id: "escolha-calculadora",
+      title: "Escolha-Caso (Calculadora)",
+      category: "Desvios Condicionais",
+      description: "Uma calculadora simples usando escolha-caso.",
+      code: `Algoritmo Calculadora()
+declare n1, n2 real;
+declare op literal;
+escreva("Digite o primeiro número:");
+leia(n1);
+escreva("Digite o segundo número:");
+leia(n2);
+escreva("Digite a operação (+, -, *, /):");
+leia(op);
+
+escolha(op)
+  caso "+": escreva("Resultado:", n1 + n2);
+  caso "-": escreva("Resultado:", n1 - n2);
+  caso "*": escreva("Resultado:", n1 * n2);
+  caso "/": 
+    se (n2 != 0) entao
+      escreva("Resultado:", n1 / n2);
+    senao
+      escreva("Erro: Divisão por zero!");
+    fimse
+  caso contrario: escreva("Operação inválida!");
 fimescolha
 fimalgoritmo`
     }

@@ -12,10 +12,12 @@ import {
   Code2,
   Download,
   Copy,
-  Check
+  Check,
+  AlertTriangle
 } from 'lucide-react';
 import { CodeEditor } from './components/Editor';
 import { PortugolInterpreter } from './interpreter/Interpreter';
+import { SyntaxAnalyzer, SyntaxError } from './interpreter/SyntaxAnalyzer';
 import { CATEGORIZED_EXAMPLES, Example } from './constants';
 import { cn } from './lib/utils';
 
@@ -34,6 +36,12 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [expandedCategories, setExpandedCategories] = useState<string[]>(["Entrada e Saída"]);
+  const [syntaxErrors, setSyntaxErrors] = useState<SyntaxError[]>([]);
+
+  useEffect(() => {
+    const errors = SyntaxAnalyzer.analyze(code);
+    setSyntaxErrors(errors);
+  }, [code]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -237,8 +245,36 @@ export default function App() {
 
         {/* Editor & Console Split */}
         <div className="flex-1 flex flex-col overflow-hidden p-2 md:p-4 gap-2 md:gap-4">
-          <div className="flex-1 flex flex-col min-h-0">
+          <div className="flex-1 flex flex-col min-h-0 relative">
             <CodeEditor code={code} onChange={setCode} />
+            
+            {/* Syntax Errors Overlay */}
+            <AnimatePresence>
+              {syntaxErrors.length > 0 && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  className="absolute bottom-4 left-4 right-4 bg-red-500/10 border border-red-500/20 rounded-lg p-3 backdrop-blur-md z-10 max-h-32 overflow-y-auto shadow-2xl scrollbar-thin scrollbar-thumb-red-500/20"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2 text-red-500 font-bold text-[10px] uppercase tracking-widest">
+                      <AlertTriangle className="w-3.5 h-3.5" />
+                      Erros de Sintaxe ({syntaxErrors.length})
+                    </div>
+                    <div className="text-[9px] text-red-500/50 font-mono">Verifique seu código</div>
+                  </div>
+                  <div className="space-y-1.5">
+                    {syntaxErrors.map((err, i) => (
+                      <div key={i} className="text-xs text-gray-300 flex gap-2 items-start group">
+                        <span className="text-red-400 font-mono font-bold bg-red-400/10 px-1 rounded min-w-[60px] text-center">Linha {err.line}</span>
+                        <span className="flex-1 leading-relaxed">{err.message}</span>
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           <div className="h-48 md:h-64 flex flex-col md:flex-row gap-2 md:gap-4">

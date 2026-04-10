@@ -476,13 +476,6 @@ export default function App() {
                     </button>
                   ))}
                 </div>
-
-                <div className="mt-12 max-w-2xl w-full bg-blue-600/20 border border-blue-500/30 rounded-xl p-6">
-                  <div className="flex items-center gap-3">
-                    <Info className="w-5 h-5 text-blue-400" />
-                    <p className="text-sm font-bold text-blue-100">Atenção: Caso encontre algum problema, experimente limpar o cache do navegador.</p>
-                  </div>
-                </div>
               </motion.div>
             )}
 

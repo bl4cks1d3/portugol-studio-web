@@ -9,7 +9,7 @@ export class SyntaxAnalyzer {
   private static readonly KEYWORDS: Set<string> = new Set([
     'algoritmo', 'fimalgoritmo', 'declare', 'inteiro', 'real', 'literal', 'logico',
     'escreva', 'leia', 'se', 'entao', 'senao', 'fimse', 'enquanto', 'fimenquanto',
-    'para', 'fimpara', 'faca', 'escolha', 'caso', 'fimescolha', 'verdadeiro', 'falso',
+    'para', 'fimpara', 'faca', 'escolha', 'caso', 'contrario', 'fimescolha', 'verdadeiro', 'falso',
     'resto', 'raizquadrada', 'potencia', 'abs', 'trunca', 'seno', 'sen', 'cosseno', 'tangente'
   ]);
 
@@ -133,14 +133,16 @@ export class SyntaxAnalyzer {
         }
         stack.push({ type: 'escolha', line: lineNumber });
       } else if (lowerLine.startsWith('caso ')) {
-        const match = lineWithoutComment.match(/caso\s+(.*?):/i);
-        if (match) {
-          const identifiers = this.getIdentifiers(match[1]);
-          identifiers.forEach(id => {
-            if (!declaredVariables.has(id.toLowerCase())) {
-              errors.push({ line: lineNumber, message: `Variável '${id}' não foi declarada`, severity: 'error' });
-            }
-          });
+        if (!lowerLine.startsWith('caso contrario:')) {
+          const match = lineWithoutComment.match(/caso\s+(.*?):/i);
+          if (match) {
+            const identifiers = this.getIdentifiers(match[1]);
+            identifiers.forEach(id => {
+              if (!declaredVariables.has(id.toLowerCase())) {
+                errors.push({ line: lineNumber, message: `Variável '${id}' não foi declarada`, severity: 'error' });
+              }
+            });
+          }
         }
       } else if (lowerLine.startsWith('fimescolha')) {
         const last = stack.pop();

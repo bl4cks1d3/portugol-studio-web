@@ -183,7 +183,7 @@ export class PortugolInterpreter {
     for (let i = 0; i < block.length; i++) {
       const l = block[i].trim();
       const lLower = l.toLowerCase();
-      if (lLower.startsWith('caso ')) {
+      if (lLower.startsWith('caso ') && !lLower.startsWith('caso contrario:')) {
         const casoMatch = l.match(/caso\s+(.*?):\s*(.*)/i);
         if (casoMatch) {
           const casoVal = this.evaluateExpression(casoMatch[1]);
@@ -329,20 +329,39 @@ export class PortugolInterpreter {
   }
 
   private async handleLeia(line: string) {
-    const varName = line.match(/leia\((.*)\);?/i)?.[1].trim();
-    if (!varName) return;
+    const varNameRaw = line.match(/leia\((.*)\);?/i)?.[1].trim();
+    if (!varNameRaw) return;
 
-    const prompt = this.lastEscrevaContent || `Digite o valor para ${varName}:`;
+    const prompt = this.lastEscrevaContent || `Digite o valor para ${varNameRaw}:`;
     const input = await this.onInputRequired(prompt);
-    this.lastEscrevaContent = null; // Reset after use
+    this.lastEscrevaContent = null;
 
-    const variable = this.state.variables.get(varName);
-    if (!variable) throw new Error(`Variável não declarada: ${varName}`);
+    const arrayMatch = varNameRaw.match(/(.+?)\[(.+?)\](?:\[(.+?)\])?/);
+    
+    if (arrayMatch) {
+      const name = arrayMatch[1];
+      const idx1 = this.evaluateExpression(arrayMatch[2]);
+      const idx2 = arrayMatch[3] ? this.evaluateExpression(arrayMatch[3]) : null;
+      
+      const variable = this.state.variables.get(name);
+      if (!variable) throw new Error(`Variável não declarada: ${name}`);
+      
+      let finalValue: any = input;
+      if (variable.type === 'inteiro') finalValue = parseInt(input);
+      else if (variable.type === 'real') finalValue = parseFloat(input);
+      else if (variable.type === 'logico') finalValue = input.toLowerCase() === 'verdadeiro' || input.toLowerCase() === 'v';
 
-    if (variable.type === 'inteiro') variable.value = parseInt(input);
-    else if (variable.type === 'real') variable.value = parseFloat(input);
-    else if (variable.type === 'logico') variable.value = input.toLowerCase() === 'verdadeiro' || input.toLowerCase() === 'v';
-    else variable.value = input;
+      if (idx2 !== null) variable.value[idx1][idx2] = finalValue;
+      else variable.value[idx1] = finalValue;
+    } else {
+      const variable = this.state.variables.get(varNameRaw);
+      if (!variable) throw new Error(`Variável não declarada: ${varNameRaw}`);
+
+      if (variable.type === 'inteiro') variable.value = parseInt(input);
+      else if (variable.type === 'real') variable.value = parseFloat(input);
+      else if (variable.type === 'logico') variable.value = input.toLowerCase() === 'verdadeiro' || input.toLowerCase() === 'v';
+      else variable.value = input;
+    }
   }
 
   private async handleSe(lines: string[], startIndex: number): Promise<{ nextIndex: number }> {
@@ -403,7 +422,7 @@ export class PortugolInterpreter {
       processed = processed.replace(varRegex, val);
     });
 
-    // Handle Portugol specific operators and functions
+    // Handle Portugol specific operators and functions with a loop to support nesting
     processed = processed
       .replace(/\s+e\s+/gi, ' && ')
       .replace(/\s+ou\s+/gi, ' || ')
@@ -413,16 +432,22 @@ export class PortugolInterpreter {
       .replace(/&&/g, '&&')
       .replace(/\|\|/g, '||')
       .replace(/!/g, '!')
-      .replace(/%/g, '%')
-      .replace(/resto\((.+?),\s*(.+?)\)/gi, '($1 % $2)')
-      .replace(/raizquadrada\((.+?)\)/gi, 'Math.sqrt($1)')
-      .replace(/potencia\((.+?),\s*(.+?)\)/gi, 'Math.pow($1, $2)')
-      .replace(/seno\((.+?)\)/gi, 'Math.sin($1)')
-      .replace(/sen\((.+?)\)/gi, 'Math.sin($1)')
-      .replace(/cosseno\((.+?)\)/gi, 'Math.cos($1)')
-      .replace(/tangente\((.+?)\)/gi, 'Math.tan($1)')
-      .replace(/abs\((.+?)\)/gi, 'Math.abs($1)')
-      .replace(/trunca\((.+?)\)/gi, 'Math.floor($1)');
+      .replace(/%/g, '%');
+
+    let previous;
+    do {
+      previous = processed;
+      processed = processed
+        .replace(/resto\((.+?),\s*(.+?)\)/gi, '($1 % $2)')
+        .replace(/raizquadrada\((.+?)\)/gi, 'Math.sqrt($1)')
+        .replace(/potencia\((.+?),\s*(.+?)\)/gi, 'Math.pow($1, $2)')
+        .replace(/seno\((.+?)\)/gi, 'Math.sin($1)')
+        .replace(/sen\((.+?)\)/gi, 'Math.sin($1)')
+        .replace(/cosseno\((.+?)\)/gi, 'Math.cos($1)')
+        .replace(/tangente\((.+?)\)/gi, 'Math.tan($1)')
+        .replace(/abs\((.+?)\)/gi, 'Math.abs($1)')
+        .replace(/trunca\((.+?)\)/gi, 'Math.floor($1)');
+    } while (processed !== previous);
     
     try {
       // Basic JS eval for math/logic
@@ -437,10 +462,17 @@ export class PortugolInterpreter {
     const args: string[] = [];
     let current = '';
     let inQuotes = false;
+    let parenDepth = 0;
+    
     for (let i = 0; i < content.length; i++) {
       const char = content[i];
       if (char === '"' || char === "'") inQuotes = !inQuotes;
-      if (char === ',' && !inQuotes) {
+      if (!inQuotes) {
+        if (char === '(') parenDepth++;
+        if (char === ')') parenDepth--;
+      }
+      
+      if (char === ',' && !inQuotes && parenDepth === 0) {
         args.push(current.trim());
         current = '';
       } else {

@@ -1,0 +1,29 @@
+{
+  "name": "Portugol Studio WEB",
+  "short_name": "Portugol",
+  "description": "Ambiente de aprendizado de lógica de programação com Portugol",
+  "theme_color": "#0f0f0f",
+  "background_color": "#0f0f0f",
+  "display": "standalone",
+  "orientation": "portrait",
+  "scope": "/",
+  "start_url": "/",
+  "icons": [
+    {
+      "src": "https://picsum.photos/seed/portugol-192/192/192",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://picsum.photos/seed/portugol-512/512/512",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "https://picsum.photos/seed/portugol-mask-512/512/512",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

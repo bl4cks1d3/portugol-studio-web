@@ -92,12 +92,12 @@ export class PortugolInterpreter {
   private async handlePara(lines: string[], startIndex: number): Promise<{ nextIndex: number }> {
     const line = lines[startIndex];
     // para(i <- 1; i <= 100; i <- i + 1)
-    const match = line.match(/para\s*\(([^;]*);([^;]*);([^)]*)\)/i);
+    const match = line.match(/para\s*\(([^;]+);([^;]+);([^)]+)\)/i);
     if (!match) throw new Error(`Sintaxe 'para' inválida na linha ${startIndex + 1}`);
 
     const init = match[1].trim();
     const condition = match[2].trim();
-    const increment = match[3].trim();
+    const increment = match[3].replace(/;$/, '').trim();
 
     const { block, endIndex } = this.findLoopBlock(lines, startIndex, 'fimpara');
 

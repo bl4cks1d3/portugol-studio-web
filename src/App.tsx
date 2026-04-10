@@ -197,12 +197,12 @@ export default function App() {
         </div>
 
         {/* Editor & Console Split */}
-        <div className="flex-1 flex flex-col md:flex-row overflow-hidden p-4 gap-4">
+        <div className="flex-1 flex flex-col overflow-hidden p-4 gap-4">
           <div className="flex-1 flex flex-col min-h-0">
             <CodeEditor code={code} onChange={setCode} />
           </div>
 
-          <div className="w-full md:w-80 flex flex-col gap-4">
+          <div className="h-48 md:h-64 flex flex-col md:flex-row gap-4">
             {/* Console */}
             <div className="flex-1 bg-[#161616] rounded-lg border border-white/10 flex flex-col overflow-hidden shadow-xl">
               <div className="p-3 border-b border-white/5 flex items-center gap-2 bg-[#1a1a1a]">
@@ -236,7 +236,7 @@ export default function App() {
                   initial={{ y: 20, opacity: 0 }}
                   animate={{ y: 0, opacity: 1 }}
                   exit={{ y: 20, opacity: 0 }}
-                  className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-4 shadow-2xl shadow-orange-500/5"
+                  className="w-full md:w-80 bg-orange-500/10 border border-orange-500/20 rounded-lg p-4 shadow-2xl shadow-orange-500/5 flex flex-col justify-center"
                 >
                   <div className="text-xs font-bold text-orange-500 uppercase mb-2 flex items-center gap-2">
                     <HelpCircle className="w-3.5 h-3.5" />

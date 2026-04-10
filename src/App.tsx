@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { CodeFormatter } from './interpreter/CodeFormatter';
 import { 
   Play, 
   Terminal, 
@@ -13,7 +14,8 @@ import {
   Download,
   Copy,
   Check,
-  AlertTriangle
+  AlertTriangle,
+  AlignLeft
 } from 'lucide-react';
 import { CodeEditor } from './components/Editor';
 import { PortugolInterpreter } from './interpreter/Interpreter';
@@ -38,12 +40,11 @@ export default function App() {
   const [expandedCategories, setExpandedCategories] = useState<string[]>(["Tutorial de Estrutura"]);
   const [syntaxErrors, setSyntaxErrors] = useState<SyntaxError[]>([]);
 
-  const [showErrors, setShowErrors] = useState(true);
+  const [showErrors, setShowErrors] = useState(false);
 
   useEffect(() => {
     const errors = SyntaxAnalyzer.analyze(code);
     setSyntaxErrors(errors);
-    if (errors.length > 0) setShowErrors(true);
   }, [code]);
 
   useEffect(() => {
@@ -89,6 +90,11 @@ export default function App() {
     navigator.clipboard.writeText(code);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleFormat = () => {
+    const formatted = CodeFormatter.format(code);
+    setCode(formatted);
   };
 
   const handleInputSubmit = (e: React.FormEvent) => {
@@ -216,6 +222,13 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-1 md:gap-3">
+            <button 
+              onClick={handleFormat}
+              className="p-1.5 md:p-2 text-gray-500 hover:text-white transition-colors"
+              title="Formatar Código"
+            >
+              <AlignLeft className="w-4 h-4 md:w-5 md:h-5" />
+            </button>
             <button 
               onClick={handleCopy}
               className="p-1.5 md:p-2 text-gray-500 hover:text-white transition-colors relative"

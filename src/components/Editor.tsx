@@ -40,14 +40,71 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ code, onChange, syntaxEr
     return syntaxErrors.find(e => e.line === lineNum);
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter') {
+      const textarea = e.currentTarget;
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const value = textarea.value;
+
+      // Find the start of the current line
+      const lineStart = value.lastIndexOf('\n', start - 1) + 1;
+      const currentLine = value.substring(lineStart, start);
+      
+      // Get current indentation
+      const indentationMatch = currentLine.match(/^\s*/);
+      let indentation = indentationMatch ? indentationMatch[0] : '';
+      
+      // Check if we should increase indentation
+      const trimmedLine = currentLine.trim().toLowerCase();
+      
+      // Keywords that open a block
+      const opensBlock = 
+        trimmedLine.endsWith('entao') || 
+        trimmedLine.endsWith('faca') || 
+        trimmedLine.startsWith('escolha') || 
+        trimmedLine.startsWith('caso') || 
+        trimmedLine.startsWith('senao') ||
+        trimmedLine.startsWith('algoritmo');
+
+      if (opensBlock) {
+        indentation += '  ';
+      }
+
+      // Insert newline + indentation
+      const newValue = value.substring(0, start) + '\n' + indentation + value.substring(end);
+      
+      onChange(newValue);
+
+      // Set cursor position
+      setTimeout(() => {
+        textarea.selectionStart = textarea.selectionEnd = start + 1 + indentation.length;
+      }, 0);
+
+      e.preventDefault();
+    }
+  };
+
+  const fontSize = isMobile ? 12 : 14;
+  const padding = isMobile ? 10 : 20;
+
   return (
     <div className="relative h-full font-mono text-sm overflow-auto bg-[#1e1e1e] rounded-lg border border-white/10 shadow-2xl flex">
       {/* Line Numbers */}
-      <div className="py-[20px] px-1 md:px-2 text-right bg-[#1a1a1a] border-r border-white/5 text-gray-600 select-none min-w-[3rem] md:min-w-[3.5rem]">
+      <div 
+        className="text-right bg-[#1a1a1a] border-r border-white/5 text-gray-600 select-none min-w-[3rem] md:min-w-[3.5rem]"
+        style={{ 
+          paddingTop: padding,
+          paddingBottom: padding,
+          fontFamily: '"JetBrains Mono", "Fira Code", monospace',
+          fontSize: fontSize,
+          lineHeight: '1.5'
+        }}
+      >
         {code.split('\n').map((_, i) => {
           const error = getErrorForLine(i + 1);
           return (
-            <div key={i} className="leading-[1.5] text-[10px] md:text-xs flex items-center justify-end gap-1 group relative">
+            <div key={i} className="px-1 md:px-2 flex items-center justify-end gap-1 group relative h-[1.5em]">
               {error && (
                 <div 
                   className={`w-1.5 h-1.5 rounded-full shrink-0 ${error.severity === 'error' ? 'bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.5)]' : 'bg-yellow-500 shadow-[0_0_5px_rgba(234,179,8,0.5)]'}`}
@@ -73,12 +130,13 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ code, onChange, syntaxEr
         <Editor
           value={code}
           onValueChange={handleValueChange}
+          onKeyDown={handleKeyDown}
           highlight={(code) => Prism.highlight(code, Prism.languages.portugol, 'portugol')}
-          padding={isMobile ? 10 : 20}
+          padding={padding}
           className="min-h-full"
           style={{
             fontFamily: '"JetBrains Mono", "Fira Code", monospace',
-            fontSize: isMobile ? 12 : 14,
+            fontSize: fontSize,
             backgroundColor: 'transparent',
             color: '#d4d4d4',
             lineHeight: '1.5',

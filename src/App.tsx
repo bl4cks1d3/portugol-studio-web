@@ -309,7 +309,7 @@ export default function App() {
             <div className="h-4 w-[1px] bg-white/10" />
             
             {/* Tabs */}
-            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar max-w-[200px] md:max-w-[500px]">
+            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar flex-1 max-w-[140px] xs:max-w-[200px] sm:max-w-[400px] md:max-w-[600px] lg:max-w-[800px]">
               {tabs.map(tab => (
                 <div
                   key={tab.id}

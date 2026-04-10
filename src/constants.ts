@@ -9,6 +9,113 @@ export interface Example {
 }
 
 export const CATEGORIZED_EXAMPLES: { [category: string]: Example[] } = {
+  "Tutorial de Estrutura": [
+    {
+      id: "tutorial-basico",
+      title: "1. Estrutura Básica",
+      category: "Tutorial de Estrutura",
+      description: "Explicação do esqueleto de todo programa Portugol.",
+      code: `// Todo programa começa com 'Algoritmo' seguido do nome
+Algoritmo MeuPrograma()
+
+// Aqui você escreve as instruções do seu código
+escreva("Este é o corpo do programa");
+
+// Todo programa termina obrigatoriamente com 'fimalgoritmo'
+fimalgoritmo
+
+/* 
+  RESUMO:
+  - Algoritmo Nome(): Início do programa.
+  - fimalgoritmo: Fim do programa.
+  - // : Comentário de uma linha.
+*/`
+    },
+    {
+      id: "tutorial-variaveis",
+      title: "2. Variáveis (declare)",
+      category: "Tutorial de Estrutura",
+      description: "Como reservar espaço na memória para dados.",
+      code: `Algoritmo TutorialVariaveis()
+// 'declare' serve para criar variáveis.
+// Sintaxe: declare nome tipo;
+
+declare idade inteiro;    // Números sem vírgula (1, 2, -5)
+declare preco real;       // Números com vírgula (10.5, 3.14)
+declare nome literal;     // Textos entre aspas ("João")
+declare vivo logico;      // verdadeiro ou falso
+
+// '<-' é o símbolo de ATRIBUIÇÃO (recebe valor)
+idade <- 25;
+preco <- 19.90;
+nome <- "Maria";
+vivo <- verdadeiro;
+
+escreva(nome, "tem", idade, "anos.");
+fimalgoritmo`
+    },
+    {
+      id: "tutorial-entrada-saida",
+      title: "3. Entrada e Saída",
+      category: "Tutorial de Estrutura",
+      description: "Como interagir com o usuário (escreva e leia).",
+      code: `Algoritmo EntradaSaida()
+declare valor inteiro;
+
+// 'escreva' mostra informações na tela
+escreva("Por favor, digite um número:");
+
+// 'leia' pausa o programa e espera o usuário digitar algo
+// O valor digitado será guardado na variável entre parênteses
+leia(valor);
+
+escreva("O valor que você digitou foi:", valor);
+fimalgoritmo`
+    },
+    {
+      id: "tutorial-condicionais",
+      title: "4. Condicionais (se/entao)",
+      category: "Tutorial de Estrutura",
+      description: "Como fazer o programa tomar decisões.",
+      code: `Algoritmo Decisao()
+declare nota real;
+nota <- 8.5;
+
+// 'se' testa uma condição
+// 'entao' indica o que fazer se for verdade
+se (nota >= 7.0) entao
+  escreva("Aprovado!");
+senao
+  // 'senao' indica o que fazer se for falso
+  escreva("Reprovado.");
+fimse // Todo 'se' precisa de um 'fimse'
+
+fimalgoritmo`
+    },
+    {
+      id: "tutorial-repeticao",
+      title: "5. Repetição (para/enquanto)",
+      category: "Tutorial de Estrutura",
+      description: "Como repetir tarefas automaticamente.",
+      code: `Algoritmo Repeticao()
+declare i inteiro;
+
+escreva("Contando com PARA:");
+// para (inicio; condicao; incremento)
+para (i <- 1; i <= 3; i <- i + 1)
+  escreva("Número:", i);
+fimpara
+
+escreva("Contando com ENQUANTO:");
+i <- 1;
+enquanto (i <= 3)
+  escreva("Número:", i);
+  i <- i + 1; // Não esqueça de aumentar o i!
+fimenquanto
+
+fimalgoritmo`
+    }
+  ],
   "Entrada e Saída": [
     {
       id: "ola-mundo",

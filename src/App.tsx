@@ -35,7 +35,7 @@ export default function App() {
   const [isRunning, setIsRunning] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
-  const [expandedCategories, setExpandedCategories] = useState<string[]>(["Entrada e Saída"]);
+  const [expandedCategories, setExpandedCategories] = useState<string[]>(["Tutorial de Estrutura"]);
   const [syntaxErrors, setSyntaxErrors] = useState<SyntaxError[]>([]);
 
   useEffect(() => {

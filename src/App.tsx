@@ -13,6 +13,7 @@ import {
   Code2,
   Download,
   Copy,
+  Share2,
   Bug,
   StepForward,
   Database,
@@ -31,6 +32,7 @@ import { SyntaxAnalyzer, SyntaxError } from './interpreter/SyntaxAnalyzer';
 import { CATEGORIZED_EXAMPLES, Example } from './constants';
 import { cn } from './lib/utils';
 import { Variable } from './types';
+import LZString from 'lz-string';
 
 const DEFAULT_CODE = `Algoritmo AreaQuadrado()
 declare lado, area real;
@@ -113,6 +115,25 @@ export default function App() {
   const [inputRequest, setInputRequest] = useState<{ prompt: string; resolve: (val: string) => void } | null>(null);
   const [inputValue, setInputValue] = useState('');
   const [copied, setCopied] = useState(false);
+  const [shared, setShared] = useState(false);
+
+  // Load shared code from URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const sharedCode = params.get('code');
+    if (sharedCode) {
+      try {
+        const decompressed = LZString.decompressFromEncodedURIComponent(sharedCode);
+        if (decompressed) {
+          addTab(decompressed, 'compartilhado.portugol');
+          // Clear URL without reloading
+          window.history.replaceState({}, '', window.location.pathname);
+        }
+      } catch (e) {
+        console.error('Erro ao carregar código compartilhado:', e);
+      }
+    }
+  }, []);
 
   const onStep = (line: number, variables: Map<string, Variable>) => {
     setDebugLine(line);
@@ -209,6 +230,16 @@ export default function App() {
     a.download = activeTab.title;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleShare = () => {
+    const compressed = LZString.compressToEncodedURIComponent(activeTab.code);
+    const shareUrl = `${window.location.origin}${window.location.pathname}?code=${compressed}`;
+    
+    navigator.clipboard.writeText(shareUrl).then(() => {
+      setShared(true);
+      setTimeout(() => setShared(false), 2000);
+    });
   };
 
   const handleCopy = () => {
@@ -345,7 +376,7 @@ export default function App() {
             <div className="h-4 w-[1px] bg-white/10" />
             
             {/* Tabs */}
-            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar flex-1 max-w-[140px] xs:max-w-[200px] sm:max-w-[400px] md:max-w-[600px] lg:max-w-[800px]">
+            <div className="flex items-center gap-1 overflow-x-auto scrollbar-thin flex-1 max-w-[140px] xs:max-w-[200px] sm:max-w-[400px] md:max-w-[600px] lg:max-w-[800px]">
               {tabs.map(tab => (
                 <div
                   key={tab.id}
@@ -432,6 +463,13 @@ export default function App() {
               title="Baixar Código"
             >
               <Download className="w-4 h-4 md:w-5 md:h-5" />
+            </button>
+            <button 
+              onClick={handleShare}
+              className="p-1.5 md:p-2 text-gray-500 hover:text-white transition-colors relative"
+              title="Compartilhar Código"
+            >
+              {shared ? <Check className="w-4 h-4 md:w-5 md:h-5 text-green-500" /> : <Share2 className="w-4 h-4 md:w-5 md:h-5" />}
             </button>
             <div className="h-4 w-[1px] bg-white/10 mx-0.5 md:mx-1" />
             

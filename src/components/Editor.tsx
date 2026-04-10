@@ -26,6 +26,11 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ code, onChange, syntaxEr
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [cursorPos, setCursorPos] = useState({ top: 0, left: 0 });
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth <= 768 : false);
+  const [scrollTop, setScrollTop] = useState(0);
+
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    setScrollTop(e.currentTarget.scrollTop);
+  };
 
   React.useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 768);
@@ -90,10 +95,10 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ code, onChange, syntaxEr
   const padding = isMobile ? 10 : 20;
 
   return (
-    <div className="relative h-full font-mono text-sm overflow-auto bg-[#1e1e1e] rounded-lg border border-white/10 shadow-2xl flex">
-      {/* Line Numbers */}
+    <div className="relative h-full font-mono text-sm bg-[#1e1e1e] rounded-lg border border-white/10 shadow-2xl flex overflow-hidden">
+      {/* Line Numbers - Fixed horizontally, scrolls vertically with editor */}
       <div 
-        className="text-right bg-[#1a1a1a] border-r border-white/5 text-gray-600 select-none min-w-[3rem] md:min-w-[3.5rem] z-10"
+        className="text-right bg-[#1a1a1a] border-r border-white/5 text-gray-600 select-none min-w-[3rem] md:min-w-[3.5rem] z-20 overflow-hidden"
         style={{ 
           paddingTop: padding,
           paddingBottom: padding,
@@ -102,39 +107,41 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ code, onChange, syntaxEr
           lineHeight: '1.5'
         }}
       >
-        {code.split('\n').map((_, i) => {
-          const error = getErrorForLine(i + 1);
-          const isDebugLine = debugLine === i;
-          return (
-            <div 
-              key={i} 
-              className={`px-1 md:px-2 flex items-center justify-end gap-1 group relative h-[1.5em] ${isDebugLine ? 'bg-blue-500/20 text-blue-400' : ''}`}
-            >
-              {isDebugLine && (
-                <div className="absolute left-0 w-1 h-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
-              )}
-              {error && (
-                <div 
-                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${error.severity === 'error' ? 'bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.5)]' : 'bg-yellow-500 shadow-[0_0_5px_rgba(234,179,8,0.5)]'}`}
-                  title={error.message}
-                />
-              )}
-              <span className={error ? (error.severity === 'error' ? 'text-red-400/50' : 'text-yellow-400/50') : ''}>
-                {i + 1}
-              </span>
-              
-              {/* Tooltip on hover */}
-              {error && (
-                <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-[10px] rounded border border-white/10 whitespace-nowrap z-50 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity shadow-xl">
-                  {error.message}
-                </div>
-              )}
-            </div>
-          );
-        })}
+        <div style={{ transform: `translateY(-${scrollTop}px)` }}>
+          {code.split('\n').map((_, i) => {
+            const error = getErrorForLine(i + 1);
+            const isDebugLine = debugLine === i;
+            return (
+              <div 
+                key={i} 
+                className={`px-1 md:px-2 flex items-center justify-end gap-1 group relative h-[1.5em] ${isDebugLine ? 'bg-blue-500/20 text-blue-400' : ''}`}
+              >
+                {isDebugLine && (
+                  <div className="absolute left-0 w-1 h-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
+                )}
+                {error && (
+                  <div 
+                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${error.severity === 'error' ? 'bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.5)]' : 'bg-yellow-500 shadow-[0_0_5px_rgba(234,179,8,0.5)]'}`}
+                    title={error.message}
+                  />
+                )}
+                <span className={error ? (error.severity === 'error' ? 'text-red-400/50' : 'text-yellow-400/50') : ''}>
+                  {i + 1}
+                </span>
+                
+                {error && (
+                  <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-[10px] rounded border border-white/10 whitespace-nowrap z-50 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity shadow-xl">
+                    {error.message}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
       
-      <div className="flex-1 relative">
+      {/* Editor Area - Scrollable */}
+      <div className="flex-1 relative overflow-auto scrollbar-thin z-10" onScroll={handleScroll}>
         {/* Indent Guides Layer */}
         <div 
           className="absolute inset-0 pointer-events-none select-none z-0"
@@ -184,6 +191,8 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ code, onChange, syntaxEr
             backgroundColor: 'transparent',
             color: '#d4d4d4',
             lineHeight: '1.5',
+            minWidth: '100%',
+            width: 'max-content'
           }}
         />
         

@@ -5,15 +5,19 @@ export class PortugolInterpreter {
   private state: InterpreterState;
   private onOutput: (text: string) => void;
   private onInputRequired: (prompt: string) => Promise<string>;
+  private onStep?: (line: number, variables: Map<string, Variable>) => Promise<void>;
   private lastEscrevaContent: string | null = null;
   private stopExecution: boolean = false;
+  private isDebugging: boolean = false;
 
   constructor(
     onOutput: (text: string) => void,
-    onInputRequired: (prompt: string) => Promise<string>
+    onInputRequired: (prompt: string) => Promise<string>,
+    onStep?: (line: number, variables: Map<string, Variable>) => Promise<void>
   ) {
     this.onOutput = onOutput;
     this.onInputRequired = onInputRequired;
+    this.onStep = onStep;
     this.state = this.resetState();
   }
 
@@ -28,19 +32,25 @@ export class PortugolInterpreter {
     };
   }
 
-  public setCallbacks(onOutput: (text: string) => void, onInputRequired: (prompt: string) => Promise<string>) {
+  public setCallbacks(
+    onOutput: (text: string) => void, 
+    onInputRequired: (prompt: string) => Promise<string>,
+    onStep?: (line: number, variables: Map<string, Variable>) => Promise<void>
+  ) {
     this.onOutput = onOutput;
     this.onInputRequired = onInputRequired;
+    this.onStep = onStep;
   }
 
-  public async run(code: string) {
+  public async run(code: string, debug: boolean = false) {
     this.state = this.resetState();
     this.lastEscrevaContent = null;
     this.stopExecution = false;
-    const lines = code.split('\n').map(l => l.trim());
+    this.isDebugging = debug;
+    const lines = code.split('\n');
     
     try {
-      await this.executeBlock(lines);
+      await this.executeBlock(lines, 0);
     } catch (e: any) {
       this.state.error = e.message;
       this.onOutput(`\nERRO: ${e.message}`);
@@ -51,14 +61,23 @@ export class PortugolInterpreter {
     this.stopExecution = true;
   }
 
-  private async executeBlock(lines: string[]) {
+  private async executeBlock(lines: string[], offset: number = 0) {
     let i = 0;
     while (i < lines.length) {
       if (this.stopExecution) throw new Error("Execução interrompida pelo usuário.");
+      
+      const absoluteLine = offset + i;
       const line = lines[i].trim();
+      
       if (!line || line.startsWith('//')) {
         i++;
         continue;
+      }
+
+      // Debug step
+      if (this.isDebugging && this.onStep) {
+        this.state.currentLine = absoluteLine;
+        await this.onStep(absoluteLine, new Map(this.state.variables));
       }
 
       try {
@@ -74,37 +93,37 @@ export class PortugolInterpreter {
         } else if (lowerLine.startsWith('leia')) {
           await this.handleLeia(line);
         } else if (lowerLine.startsWith('se')) {
-          const { nextIndex } = await this.handleSe(lines, i);
+          const { nextIndex } = await this.handleSe(lines, i, offset);
           i = nextIndex;
           continue;
         } else if (lowerLine.startsWith('enquanto')) {
-          const { nextIndex } = await this.handleEnquanto(lines, i);
+          const { nextIndex } = await this.handleEnquanto(lines, i, offset);
           i = nextIndex;
           continue;
         } else if (lowerLine.startsWith('para')) {
-          const { nextIndex } = await this.handlePara(lines, i);
+          const { nextIndex } = await this.handlePara(lines, i, offset);
           i = nextIndex;
           continue;
         } else if (lowerLine.startsWith('faca')) {
-          const { nextIndex } = await this.handleFacaEnquanto(lines, i);
+          const { nextIndex } = await this.handleFacaEnquanto(lines, i, offset);
           i = nextIndex;
           continue;
         } else if (lowerLine.startsWith('escolha')) {
-          const { nextIndex } = await this.handleEscolha(lines, i);
+          const { nextIndex } = await this.handleEscolha(lines, i, offset);
           i = nextIndex;
           continue;
         } else if (line.includes('<-') || line.includes('++') || line.includes('--')) {
           this.handleAssignment(line);
         }
       } catch (error: any) {
-        throw new Error(`Erro na linha ${i + 1}: ${error.message}`);
+        throw new Error(`Erro na linha ${absoluteLine + 1}: ${error.message}`);
       }
       
       i++;
     }
   }
 
-  private async handlePara(lines: string[], startIndex: number): Promise<{ nextIndex: number }> {
+  private async handlePara(lines: string[], startIndex: number, offset: number): Promise<{ nextIndex: number }> {
     const line = lines[startIndex].trim();
     
     // Standard syntax: para (i <- 1; i <= 10; i <- i + 1)
@@ -116,7 +135,7 @@ export class PortugolInterpreter {
         const init = parts[0].trim();
         const condition = parts[1].trim();
         const increment = parts[2].trim();
-        return this.runParaLoop(init, condition, increment, lines, startIndex);
+        return this.runParaLoop(init, condition, increment, lines, startIndex, offset);
       }
     }
 
@@ -132,13 +151,13 @@ export class PortugolInterpreter {
       const condition = `${varName} <= ${endVal}`;
       const increment = `${varName} <- ${varName} + ${step}`;
       
-      return this.runParaLoop(init, condition, increment, lines, startIndex);
+      return this.runParaLoop(init, condition, increment, lines, startIndex, offset);
     }
 
-    throw new Error(`Sintaxe 'para' inválida na linha ${startIndex + 1}. Use o formato: para (i <- 1; i <= 10; i <- i + 1)`);
+    throw new Error(`Sintaxe 'para' inválida na linha ${offset + startIndex + 1}. Use o formato: para (i <- 1; i <= 10; i <- i + 1)`);
   }
 
-  private async runParaLoop(init: string, condition: string, increment: string, lines: string[], startIndex: number) {
+  private async runParaLoop(init: string, condition: string, increment: string, lines: string[], startIndex: number, offset: number) {
     const { block, endIndex } = this.findLoopBlock(lines, startIndex, 'fimpara');
 
     // Execute init
@@ -153,7 +172,7 @@ export class PortugolInterpreter {
       if (safetyCounter++ > MAX_ITERATIONS) {
         throw new Error("Loop infinito detectado ou limite de execuções excedido.");
       }
-      await this.executeBlock(block);
+      await this.executeBlock(block, offset + startIndex + 1);
       // Execute increment
       if (increment.includes('<-') || increment.includes('++') || increment.includes('--')) {
         this.handleAssignment(increment);
@@ -169,26 +188,26 @@ export class PortugolInterpreter {
     return { nextIndex: endIndex + 1 };
   }
 
-  private async handleFacaEnquanto(lines: string[], startIndex: number): Promise<{ nextIndex: number }> {
+  private async handleFacaEnquanto(lines: string[], startIndex: number, offset: number): Promise<{ nextIndex: number }> {
     const { block, endIndex } = this.findLoopBlock(lines, startIndex, 'enquanto');
     
     // The line at endIndex is the 'enquanto(condition)' line
     const conditionLine = lines[endIndex];
     const condition = conditionLine.match(/enquanto\s*\((.*)\)/i)?.[1];
-    if (!condition) throw new Error(`Sintaxe 'enquanto' de fechamento do 'faca' inválida na linha ${endIndex + 1}`);
+    if (!condition) throw new Error(`Sintaxe 'enquanto' de fechamento do 'faca' inválida na linha ${offset + endIndex + 1}`);
 
     do {
       if (this.stopExecution) throw new Error("Execução interrompida pelo usuário.");
-      await this.executeBlock(block);
+      await this.executeBlock(block, offset + startIndex + 1);
     } while (this.evaluateExpression(condition));
 
     return { nextIndex: endIndex + 1 };
   }
 
-  private async handleEscolha(lines: string[], startIndex: number): Promise<{ nextIndex: number }> {
+  private async handleEscolha(lines: string[], startIndex: number, offset: number): Promise<{ nextIndex: number }> {
     const line = lines[startIndex];
     const match = line.match(/escolha\s*\((.+)\)/i);
-    if (!match) throw new Error(`Sintaxe 'escolha' inválida na linha ${startIndex + 1}`);
+    if (!match) throw new Error(`Sintaxe 'escolha' inválida na linha ${offset + startIndex + 1}`);
     const value = this.evaluateExpression(match[1]);
 
     const { block, endIndex } = this.findLoopBlock(lines, startIndex, 'fimescolha');
@@ -204,10 +223,10 @@ export class PortugolInterpreter {
           if (String(casoVal) === String(value)) {
             const sameLineCode = casoMatch[2].trim();
             if (sameLineCode) {
-              await this.executeBlock([sameLineCode]);
+              await this.executeBlock([sameLineCode], offset + startIndex + 1 + i);
             } else {
               const subBlock = this.getCaseBlock(block, i);
-              await this.executeBlock(subBlock);
+              await this.executeBlock(subBlock, offset + startIndex + 1 + i + 1);
             }
             found = true;
             break;
@@ -226,10 +245,10 @@ export class PortugolInterpreter {
           const match = l.match(/caso contrario:\s*(.*)/i);
           const sameLineCode = match?.[1]?.trim();
           if (sameLineCode) {
-            await this.executeBlock([sameLineCode]);
+            await this.executeBlock([sameLineCode], offset + startIndex + 1 + i);
           } else {
             const subBlock = this.getCaseBlock(block, i);
-            await this.executeBlock(subBlock);
+            await this.executeBlock(subBlock, offset + startIndex + 1 + i + 1);
           }
           break;
         }
@@ -347,7 +366,14 @@ export class PortugolInterpreter {
     if (!varNameRaw) return;
 
     const prompt = this.lastEscrevaContent || `Digite o valor para ${varNameRaw}:`;
+    
+    // Temporarily disable debugging during input to avoid double pausing
+    const wasDebugging = this.isDebugging;
+    this.isDebugging = false;
+    
     const input = await this.onInputRequired(prompt);
+    
+    this.isDebugging = wasDebugging;
     this.lastEscrevaContent = null;
 
     const arrayMatch = varNameRaw.match(/(.+?)\[(.+?)\](?:\[(.+?)\])?/);
@@ -378,33 +404,45 @@ export class PortugolInterpreter {
     }
   }
 
-  private async handleSe(lines: string[], startIndex: number): Promise<{ nextIndex: number }> {
+  private async handleSe(lines: string[], startIndex: number, offset: number): Promise<{ nextIndex: number }> {
     const line = lines[startIndex];
     const condition = line.match(/se\s*\((.*)\)\s*entao/i)?.[1];
-    if (!condition) throw new Error(`Sintaxe 'se' inválida na linha ${startIndex + 1}`);
+    if (!condition) throw new Error(`Sintaxe 'se' inválida na linha ${offset + startIndex + 1}`);
 
     const { block: thenBlock, elseBlock, endIndex } = this.findConditionalBlocks(lines, startIndex);
     
     const conditionResult = this.evaluateExpression(condition);
     if (conditionResult) {
-      await this.executeBlock(thenBlock);
+      await this.executeBlock(thenBlock, offset + startIndex + 1);
     } else if (elseBlock.length > 0) {
-      await this.executeBlock(elseBlock);
+      // Find where 'senao' starts to give correct offset
+      let senaoOffset = 0;
+      let depth = 1;
+      for (let j = startIndex + 1; j < endIndex; j++) {
+        const l = lines[j].trim().toLowerCase();
+        if (l.startsWith('se ') || l.startsWith('se(')) depth++;
+        else if (l === 'fimse') depth--;
+        if (l === 'senao' && depth === 1) {
+          senaoOffset = j - startIndex;
+          break;
+        }
+      }
+      await this.executeBlock(elseBlock, offset + startIndex + 1 + senaoOffset);
     }
 
     return { nextIndex: endIndex + 1 };
   }
 
-  private async handleEnquanto(lines: string[], startIndex: number): Promise<{ nextIndex: number }> {
+  private async handleEnquanto(lines: string[], startIndex: number, offset: number): Promise<{ nextIndex: number }> {
     const line = lines[startIndex];
     const condition = line.match(/enquanto\s*\((.*)\)/i)?.[1];
-    if (!condition) throw new Error(`Sintaxe 'enquanto' inválida na linha ${startIndex + 1}`);
+    if (!condition) throw new Error(`Sintaxe 'enquanto' inválida na linha ${offset + startIndex + 1}`);
 
     const { block, endIndex } = this.findLoopBlock(lines, startIndex, 'fimenquanto');
     
     while (this.evaluateExpression(condition)) {
       if (this.stopExecution) throw new Error("Execução interrompida pelo usuário.");
-      await this.executeBlock(block);
+      await this.executeBlock(block, offset + startIndex + 1);
     }
 
     return { nextIndex: endIndex + 1 };

@@ -19,9 +19,10 @@ interface CodeEditorProps {
   code: string;
   onChange: (code: string) => void;
   syntaxErrors?: SyntaxError[];
+  debugLine?: number | null;
 }
 
-export const CodeEditor: React.FC<CodeEditorProps> = ({ code, onChange, syntaxErrors = [] }) => {
+export const CodeEditor: React.FC<CodeEditorProps> = ({ code, onChange, syntaxErrors = [], debugLine = null }) => {
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [cursorPos, setCursorPos] = useState({ top: 0, left: 0 });
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth <= 768 : false);
@@ -103,8 +104,15 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ code, onChange, syntaxEr
       >
         {code.split('\n').map((_, i) => {
           const error = getErrorForLine(i + 1);
+          const isDebugLine = debugLine === i;
           return (
-            <div key={i} className="px-1 md:px-2 flex items-center justify-end gap-1 group relative h-[1.5em]">
+            <div 
+              key={i} 
+              className={`px-1 md:px-2 flex items-center justify-end gap-1 group relative h-[1.5em] ${isDebugLine ? 'bg-blue-500/20 text-blue-400' : ''}`}
+            >
+              {isDebugLine && (
+                <div className="absolute left-0 w-1 h-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
+              )}
               {error && (
                 <div 
                   className={`w-1.5 h-1.5 rounded-full shrink-0 ${error.severity === 'error' ? 'bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.5)]' : 'bg-yellow-500 shadow-[0_0_5px_rgba(234,179,8,0.5)]'}`}
@@ -142,6 +150,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ code, onChange, syntaxEr
             const lineIndents = lines.map(l => l.trim().length === 0 ? -1 : (l.match(/^\s*/)?.[0].length || 0));
             
             return lines.map((_, i) => {
+              const isDebugLine = debugLine === i;
               let indent = lineIndents[i];
               if (indent === -1) {
                 let prev = 0;
@@ -152,7 +161,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ code, onChange, syntaxEr
               }
               const levels = Math.floor(indent / 2);
               return (
-                <div key={i} className="h-[1.5em] flex">
+                <div key={i} className={`h-[1.5em] flex ${isDebugLine ? 'bg-blue-500/10' : ''}`}>
                   {Array.from({ length: levels }).map((_, j) => (
                     <div key={j} className="border-l border-white/[0.05] h-full" style={{ width: '2ch' }} />
                   ))}

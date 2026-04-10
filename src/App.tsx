@@ -38,9 +38,12 @@ export default function App() {
   const [expandedCategories, setExpandedCategories] = useState<string[]>(["Tutorial de Estrutura"]);
   const [syntaxErrors, setSyntaxErrors] = useState<SyntaxError[]>([]);
 
+  const [showErrors, setShowErrors] = useState(true);
+
   useEffect(() => {
     const errors = SyntaxAnalyzer.analyze(code);
     setSyntaxErrors(errors);
+    if (errors.length > 0) setShowErrors(true);
   }, [code]);
 
   useEffect(() => {
@@ -246,7 +249,7 @@ export default function App() {
         {/* Editor & Console Split */}
         <div className="flex-1 flex flex-col overflow-hidden p-2 md:p-4 gap-2 md:gap-4">
           <div className="flex-1 flex flex-col min-h-0 relative">
-            <CodeEditor code={code} onChange={setCode} />
+            <CodeEditor code={code} onChange={setCode} syntaxErrors={syntaxErrors} />
             
             {/* Syntax Errors Overlay */}
             <AnimatePresence>
@@ -255,23 +258,54 @@ export default function App() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 10 }}
-                  className="absolute bottom-4 left-4 right-4 bg-red-500/10 border border-red-500/20 rounded-lg p-3 backdrop-blur-md z-10 max-h-32 overflow-y-auto shadow-2xl scrollbar-thin scrollbar-thumb-red-500/20"
+                  className={cn(
+                    "absolute bottom-4 left-4 right-4 bg-[#1a1a1a]/95 border rounded-lg overflow-hidden backdrop-blur-md z-10 shadow-2xl transition-all duration-300",
+                    syntaxErrors.some(e => e.severity === 'error') ? "border-red-500/30" : "border-yellow-500/30",
+                    !showErrors ? "h-10" : "max-h-48"
+                  )}
                 >
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2 text-red-500 font-bold text-[10px] uppercase tracking-widest">
-                      <AlertTriangle className="w-3.5 h-3.5" />
-                      Erros de Sintaxe ({syntaxErrors.length})
+                  <div 
+                    className={cn(
+                      "flex items-center justify-between px-3 py-2 cursor-pointer select-none border-b border-white/5",
+                      syntaxErrors.some(e => e.severity === 'error') ? "bg-red-500/5" : "bg-yellow-500/5"
+                    )}
+                    onClick={() => setShowErrors(!showErrors)}
+                  >
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className={cn(
+                        "w-3.5 h-3.5",
+                        syntaxErrors.some(e => e.severity === 'error') ? "text-red-500" : "text-yellow-500"
+                      )} />
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-gray-300">
+                        Problemas de Sintaxe ({syntaxErrors.length})
+                      </span>
                     </div>
-                    <div className="text-[9px] text-red-500/50 font-mono">Verifique seu código</div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] text-gray-500 font-mono hidden sm:inline">
+                        {showErrors ? "Clique para recolher" : "Clique para expandir"}
+                      </span>
+                      <ChevronDown className={cn(
+                        "w-4 h-4 text-gray-500 transition-transform",
+                        !showErrors && "rotate-180"
+                      )} />
+                    </div>
                   </div>
-                  <div className="space-y-1.5">
-                    {syntaxErrors.map((err, i) => (
-                      <div key={i} className="text-xs text-gray-300 flex gap-2 items-start group">
-                        <span className="text-red-400 font-mono font-bold bg-red-400/10 px-1 rounded min-w-[60px] text-center">Linha {err.line}</span>
-                        <span className="flex-1 leading-relaxed">{err.message}</span>
-                      </div>
-                    ))}
-                  </div>
+                  
+                  {showErrors && (
+                    <div className="p-3 space-y-2 overflow-y-auto max-h-36 scrollbar-thin scrollbar-thumb-white/10">
+                      {syntaxErrors.map((err, i) => (
+                        <div key={i} className="text-xs text-gray-300 flex gap-3 items-start group">
+                          <span className={cn(
+                            "font-mono font-bold px-1.5 py-0.5 rounded min-w-[65px] text-center text-[10px]",
+                            err.severity === 'error' ? "bg-red-500/20 text-red-400" : "bg-yellow-500/20 text-yellow-400"
+                          )}>
+                            Linha {err.line}
+                          </span>
+                          <span className="flex-1 leading-relaxed text-gray-400">{err.message}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>

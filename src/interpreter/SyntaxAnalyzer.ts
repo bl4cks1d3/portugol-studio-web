@@ -6,21 +6,51 @@ export interface SyntaxError {
 }
 
 export class SyntaxAnalyzer {
+  private static readonly KEYWORDS: Set<string> = new Set([
+    'algoritmo', 'fimalgoritmo', 'declare', 'inteiro', 'real', 'literal', 'logico',
+    'escreva', 'leia', 'se', 'entao', 'senao', 'fimse', 'enquanto', 'fimenquanto',
+    'para', 'fimpara', 'faca', 'escolha', 'caso', 'fimescolha', 'verdadeiro', 'falso',
+    'resto', 'raizquadrada', 'potencia', 'abs', 'trunca', 'seno', 'sen', 'cosseno', 'tangente'
+  ]);
+
+  private static getIdentifiers(expr: string): string[] {
+    // Remove string literals
+    const noStrings = expr.replace(/"[^"]*"|'[^']*'/g, ' ');
+    // Match identifiers (words starting with letter/underscore)
+    const matches = (noStrings.match(/\b[a-zA-Z_][a-zA-Z0-9_]*\b/g) || []) as string[];
+    return matches.filter(id => !SyntaxAnalyzer.KEYWORDS.has(id.toLowerCase()) && isNaN(Number(id)));
+  }
+
   public static analyze(code: string): SyntaxError[] {
     const errors: SyntaxError[] = [];
     const lines = code.split('\n');
     const stack: { type: string; line: number }[] = [];
+    const declaredVariables = new Set<string>();
 
     let hasAlgoritmo = false;
     let hasFimalgoritmo = false;
 
+    // First pass: Collect all declared variables
+    lines.forEach((line) => {
+      const lineWithoutComment = line.split('//')[0].trim();
+      if (lineWithoutComment.toLowerCase().startsWith('declare')) {
+        const match = lineWithoutComment.match(/declare\s+(.+)\s+(inteiro|real|literal|logico)/i);
+        if (match) {
+          const namesPart = match[1];
+          const names = namesPart.split(',').map(n => n.trim().split('[')[0].trim());
+          names.forEach(name => {
+            if (name) declaredVariables.add(name.toLowerCase());
+          });
+        }
+      }
+    });
+
     lines.forEach((line, index) => {
-      const trimmedLine = line.trim();
       const lineNumber = index + 1;
+      const lineWithoutComment = line.split('//')[0].trim();
+      if (!lineWithoutComment) return;
 
-      if (!trimmedLine || trimmedLine.startsWith('//')) return;
-
-      const lowerLine = trimmedLine.toLowerCase();
+      const lowerLine = lineWithoutComment.toLowerCase();
 
       // Basic structure checks
       if (lowerLine.startsWith('algoritmo')) {
@@ -30,25 +60,54 @@ export class SyntaxAnalyzer {
         hasAlgoritmo = true;
       }
 
+      if (lowerLine.startsWith('declare')) {
+        const match = lineWithoutComment.match(/declare\s+(.+)\s+(inteiro|real|literal|logico)/i);
+        if (!match) {
+          errors.push({ line: lineNumber, message: "Declaração incorreta. Use: declare variavel tipo (inteiro, real, literal, logico)", severity: 'error' });
+        }
+      }
+
       if (lowerLine.startsWith('fimalgoritmo')) {
         hasFimalgoritmo = true;
       }
 
       // Block tracking
       if (lowerLine.startsWith('se ') || lowerLine.startsWith('se(')) {
-        if (!lowerLine.includes('entao')) {
+        const match = lineWithoutComment.match(/se\s*\((.*)\)\s*entao/i);
+        if (match) {
+          const identifiers = this.getIdentifiers(match[1]);
+          identifiers.forEach(id => {
+            if (!declaredVariables.has(id.toLowerCase())) {
+              errors.push({ line: lineNumber, message: `Variável '${id}' não foi declarada`, severity: 'error' });
+            }
+          });
+        } else if (!lowerLine.includes('entao')) {
           errors.push({ line: lineNumber, message: "Faltando 'entao' após a condição do 'se'", severity: 'error' });
         }
         stack.push({ type: 'se', line: lineNumber });
-      } else if (lowerLine === 'fimse') {
+      } else if (lowerLine === 'senao' || lowerLine.startsWith('senao ')) {
+        const last = stack[stack.length - 1];
+        if (!last || last.type !== 'se') {
+          errors.push({ line: lineNumber, message: "'senao' fora de um bloco 'se'", severity: 'error' });
+        }
+      } else if (lowerLine.startsWith('fimse')) {
         const last = stack.pop();
         if (!last || last.type !== 'se') {
           errors.push({ line: lineNumber, message: "'fimse' sem um 'se' correspondente", severity: 'error' });
           if (last) stack.push(last);
         }
       } else if (lowerLine.startsWith('enquanto')) {
+        const match = lineWithoutComment.match(/enquanto\s*\((.*)\)/i);
+        if (match) {
+          const identifiers = this.getIdentifiers(match[1]);
+          identifiers.forEach(id => {
+            if (!declaredVariables.has(id.toLowerCase())) {
+              errors.push({ line: lineNumber, message: `Variável '${id}' não foi declarada`, severity: 'error' });
+            }
+          });
+        }
         stack.push({ type: 'enquanto', line: lineNumber });
-      } else if (lowerLine === 'fimenquanto') {
+      } else if (lowerLine.startsWith('fimenquanto')) {
         const last = stack.pop();
         if (!last || last.type !== 'enquanto') {
           errors.push({ line: lineNumber, message: "'fimenquanto' sem um 'enquanto' correspondente", severity: 'error' });
@@ -56,15 +115,34 @@ export class SyntaxAnalyzer {
         }
       } else if (lowerLine.startsWith('para')) {
         stack.push({ type: 'para', line: lineNumber });
-      } else if (lowerLine === 'fimpara') {
+      } else if (lowerLine.startsWith('fimpara')) {
         const last = stack.pop();
         if (!last || last.type !== 'para') {
           errors.push({ line: lineNumber, message: "'fimpara' sem um 'para' correspondente", severity: 'error' });
           if (last) stack.push(last);
         }
       } else if (lowerLine.startsWith('escolha')) {
+        const match = lineWithoutComment.match(/escolha\((.*)\)/i);
+        if (match) {
+          const identifiers = this.getIdentifiers(match[1]);
+          identifiers.forEach(id => {
+            if (!declaredVariables.has(id.toLowerCase())) {
+              errors.push({ line: lineNumber, message: `Variável '${id}' não foi declarada`, severity: 'error' });
+            }
+          });
+        }
         stack.push({ type: 'escolha', line: lineNumber });
-      } else if (lowerLine === 'fimescolha') {
+      } else if (lowerLine.startsWith('caso ')) {
+        const match = lineWithoutComment.match(/caso\s+(.*?):/i);
+        if (match) {
+          const identifiers = this.getIdentifiers(match[1]);
+          identifiers.forEach(id => {
+            if (!declaredVariables.has(id.toLowerCase())) {
+              errors.push({ line: lineNumber, message: `Variável '${id}' não foi declarada`, severity: 'error' });
+            }
+          });
+        }
+      } else if (lowerLine.startsWith('fimescolha')) {
         const last = stack.pop();
         if (!last || last.type !== 'escolha') {
           errors.push({ line: lineNumber, message: "'fimescolha' sem um 'escolha' correspondente", severity: 'error' });
@@ -72,19 +150,69 @@ export class SyntaxAnalyzer {
         }
       }
 
-      // Semicolon check for declarations and assignments
-      if (lowerLine.startsWith('declare') && !trimmedLine.endsWith(';')) {
-        errors.push({ line: lineNumber, message: "Faltando ';' ao final da declaração", severity: 'warning' });
-      }
-      
-      // Assignment check
-      if (trimmedLine.includes('<-') && !trimmedLine.endsWith(';') && !stack.some(s => s.type === 'para')) {
-        // Para header doesn't need semicolon at the end of the line
+      // Variable usage checks
+      if (lineWithoutComment.includes('<-')) {
+        const parts = lineWithoutComment.split('<-');
+        const targetPart = parts[0].trim();
+        const target = targetPart.split('[')[0].trim();
+        
+        // Check target variable
+        if (!declaredVariables.has(target.toLowerCase()) && 
+            !['algoritmo', 'fimalgoritmo', 'se', 'enquanto', 'para', 'escolha'].some(k => target.toLowerCase().startsWith(k))) {
+           
+           const isParaVar = stack.some(s => s.type === 'para' && s.line === lineNumber);
+           if (!isParaVar) {
+             errors.push({ line: lineNumber, message: `Variável '${target}' não foi declarada`, severity: 'error' });
+           }
+        }
+
+        // Check expression variables
+        if (parts[1]) {
+          const identifiers = this.getIdentifiers(parts[1]);
+          identifiers.forEach(id => {
+            if (!declaredVariables.has(id.toLowerCase())) {
+              errors.push({ line: lineNumber, message: `Variável '${id}' não foi declarada`, severity: 'error' });
+            }
+          });
+        }
       }
 
+      if (lowerLine.startsWith('leia(')) {
+        const match = lineWithoutComment.match(/leia\((.*?)\)/i);
+        if (match) {
+          const varName = match[1].trim().split('[')[0].trim();
+          if (varName && !declaredVariables.has(varName.toLowerCase())) {
+            errors.push({ line: lineNumber, message: `Variável '${varName}' no 'leia' não foi declarada`, severity: 'error' });
+          }
+        }
+      }
+
+      if (lowerLine.startsWith('escreva(')) {
+        const match = lineWithoutComment.match(/escreva\((.*)\)/i);
+        if (match) {
+          const content = match[1];
+          const identifiers = this.getIdentifiers(content);
+          identifiers.forEach(id => {
+            if (!declaredVariables.has(id.toLowerCase())) {
+              errors.push({ line: lineNumber, message: `Variável '${id}' não foi declarada`, severity: 'error' });
+            }
+          });
+        }
+      }
+
+      // Semicolon check
+      const needsSemicolon = lowerLine.startsWith('declare') || 
+                            (lineWithoutComment.includes('<-') && !stack.some(s => s.type === 'para' && s.line === lineNumber)) ||
+                            lowerLine.startsWith('escreva(') ||
+                            lowerLine.startsWith('leia(');
+
+      if (needsSemicolon && !lineWithoutComment.endsWith(';')) {
+        errors.push({ line: lineNumber, message: "Faltando ';' ao final da instrução", severity: 'warning' });
+      }
+      
       // Parentheses balance
-      const openParen = (trimmedLine.match(/\(/g) || []).length;
-      const closeParen = (trimmedLine.match(/\)/g) || []).length;
+      const openParen = (lineWithoutComment.match(/\(/g) || []).length;
+      const closeParen = (lineWithoutComment.match(/\)/g) || []).length;
       if (openParen !== closeParen) {
         errors.push({ line: lineNumber, message: "Parênteses não balanceados", severity: 'error' });
       }
@@ -99,7 +227,7 @@ export class SyntaxAnalyzer {
 
     while (stack.length > 0) {
       const last = stack.pop()!;
-      errors.push({ line: last.line, message: `Bloco '${last.type}' não foi fechado corretamente`, severity: 'error' });
+      errors.push({ line: last.line, message: `Bloco '${last.type}' aberto na linha ${last.line} não foi fechado`, severity: 'error' });
     }
 
     return errors;

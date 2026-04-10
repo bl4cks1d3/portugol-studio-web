@@ -13,12 +13,15 @@ const KEYWORDS = [
   'seno', 'sen', 'cosseno', 'tangente'
 ];
 
+import { SyntaxError } from '../interpreter/SyntaxAnalyzer';
+
 interface CodeEditorProps {
   code: string;
   onChange: (code: string) => void;
+  syntaxErrors?: SyntaxError[];
 }
 
-export const CodeEditor: React.FC<CodeEditorProps> = ({ code, onChange }) => {
+export const CodeEditor: React.FC<CodeEditorProps> = ({ code, onChange, syntaxErrors = [] }) => {
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [cursorPos, setCursorPos] = useState({ top: 0, left: 0 });
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth <= 768 : false);
@@ -31,19 +34,39 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ code, onChange }) => {
 
   const handleValueChange = (newCode: string) => {
     onChange(newCode);
-    
-    // Simple autocomplete logic
-    const lines = newCode.split('\n');
-    // This is a very basic implementation, ideally we'd use a more robust editor for this
+  };
+
+  const getErrorForLine = (lineNum: number) => {
+    return syntaxErrors.find(e => e.line === lineNum);
   };
 
   return (
     <div className="relative h-full font-mono text-sm overflow-auto bg-[#1e1e1e] rounded-lg border border-white/10 shadow-2xl flex">
       {/* Line Numbers */}
-      <div className="py-[20px] px-2 md:px-3 text-right bg-[#1a1a1a] border-r border-white/5 text-gray-600 select-none min-w-[2.5rem] md:min-w-[3rem]">
-        {code.split('\n').map((_, i) => (
-          <div key={i} className="leading-[1.5] text-[10px] md:text-xs">{i + 1}</div>
-        ))}
+      <div className="py-[20px] px-1 md:px-2 text-right bg-[#1a1a1a] border-r border-white/5 text-gray-600 select-none min-w-[3rem] md:min-w-[3.5rem]">
+        {code.split('\n').map((_, i) => {
+          const error = getErrorForLine(i + 1);
+          return (
+            <div key={i} className="leading-[1.5] text-[10px] md:text-xs flex items-center justify-end gap-1 group relative">
+              {error && (
+                <div 
+                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${error.severity === 'error' ? 'bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.5)]' : 'bg-yellow-500 shadow-[0_0_5px_rgba(234,179,8,0.5)]'}`}
+                  title={error.message}
+                />
+              )}
+              <span className={error ? (error.severity === 'error' ? 'text-red-400/50' : 'text-yellow-400/50') : ''}>
+                {i + 1}
+              </span>
+              
+              {/* Tooltip on hover */}
+              {error && (
+                <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-[10px] rounded border border-white/10 whitespace-nowrap z-50 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity shadow-xl">
+                  {error.message}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
       
       <div className="flex-1 relative">

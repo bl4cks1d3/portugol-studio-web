@@ -21,6 +21,13 @@ interface CodeEditorProps {
 export const CodeEditor: React.FC<CodeEditorProps> = ({ code, onChange }) => {
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [cursorPos, setCursorPos] = useState({ top: 0, left: 0 });
+  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth <= 768 : false);
+
+  React.useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const handleValueChange = (newCode: string) => {
     onChange(newCode);
@@ -33,9 +40,9 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ code, onChange }) => {
   return (
     <div className="relative h-full font-mono text-sm overflow-auto bg-[#1e1e1e] rounded-lg border border-white/10 shadow-2xl flex">
       {/* Line Numbers */}
-      <div className="py-[20px] px-3 text-right bg-[#1a1a1a] border-r border-white/5 text-gray-600 select-none min-w-[3rem]">
+      <div className="py-[20px] px-2 md:px-3 text-right bg-[#1a1a1a] border-r border-white/5 text-gray-600 select-none min-w-[2.5rem] md:min-w-[3rem]">
         {code.split('\n').map((_, i) => (
-          <div key={i} className="leading-[1.5]">{i + 1}</div>
+          <div key={i} className="leading-[1.5] text-[10px] md:text-xs">{i + 1}</div>
         ))}
       </div>
       
@@ -44,11 +51,11 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ code, onChange }) => {
           value={code}
           onValueChange={handleValueChange}
           highlight={(code) => Prism.highlight(code, Prism.languages.portugol, 'portugol')}
-          padding={20}
+          padding={isMobile ? 10 : 20}
           className="min-h-full"
           style={{
             fontFamily: '"JetBrains Mono", "Fira Code", monospace',
-            fontSize: 14,
+            fontSize: isMobile ? 12 : 14,
             backgroundColor: 'transparent',
             color: '#d4d4d4',
             lineHeight: '1.5',

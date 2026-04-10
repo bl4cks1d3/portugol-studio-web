@@ -1,0 +1,41 @@
+
+{
+  "entities": {
+    "Example": {
+      "title": "Example",
+      "description": "A Portugol code example",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "code": { "type": "string" },
+        "description": { "type": "string" },
+        "order": { "type": "number" }
+      },
+      "required": ["title", "category", "code"]
+    },
+    "Question": {
+      "title": "Question",
+      "description": "A programming challenge for students",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "initialCode": { "type": "string" },
+        "expectedOutput": { "type": "string" },
+        "difficulty": { "type": "string", "enum": ["easy", "medium", "hard"] }
+      },
+      "required": ["title", "description", "initialCode"]
+    }
+  },
+  "firestore": {
+    "/examples/{exampleId}": {
+      "schema": "Example",
+      "description": "Collection of Portugol examples"
+    },
+    "/questions/{questionId}": {
+      "schema": "Question",
+      "description": "Collection of programming questions"
+    }
+  }
+}

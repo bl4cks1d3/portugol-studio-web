@@ -15,7 +15,12 @@ import {
   Copy,
   Check,
   AlertTriangle,
-  AlignLeft
+  AlignLeft,
+  Plus,
+  X,
+  Square,
+  Upload,
+  Edit3
 } from 'lucide-react';
 import { CodeEditor } from './components/Editor';
 import { PortugolInterpreter } from './interpreter/Interpreter';
@@ -31,21 +36,59 @@ area <- lado * lado; // Calculando a área.
 escreva("A área é:", area);
 fimalgoritmo`;
 
+const BLANK_TEMPLATE = `Algoritmo inicio()
+
+fimalgoritmo`;
+
+interface Tab {
+  id: string;
+  title: string;
+  code: string;
+  output: string[];
+  syntaxErrors: SyntaxError[];
+  isRunning: boolean;
+}
+
 export default function App() {
-  const [code, setCode] = useState(DEFAULT_CODE);
-  const [output, setOutput] = useState<string[]>([]);
-  const [isRunning, setIsRunning] = useState(false);
+  const [tabs, setTabs] = useState<Tab[]>([
+    { id: '1', title: 'algoritmo.portugol', code: DEFAULT_CODE, output: [], syntaxErrors: [], isRunning: false }
+  ]);
+  const [activeTabId, setActiveTabId] = useState('1');
+  
+  const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0];
+
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [expandedCategories, setExpandedCategories] = useState<string[]>(["Tutorial de Estrutura"]);
-  const [syntaxErrors, setSyntaxErrors] = useState<SyntaxError[]>([]);
-
   const [showErrors, setShowErrors] = useState(false);
+  const [editingTabId, setEditingTabId] = useState<string | null>(null);
+  const [tempTabTitle, setTempTabTitle] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const errors = SyntaxAnalyzer.analyze(code);
-    setSyntaxErrors(errors);
-  }, [code]);
+    const errors = SyntaxAnalyzer.analyze(activeTab.code);
+    updateActiveTab({ syntaxErrors: errors });
+  }, [activeTab.code, activeTabId]);
+
+  const updateActiveTab = (updates: Partial<Tab>) => {
+    setTabs(prev => prev.map(t => t.id === activeTabId ? { ...t, ...updates } : t));
+  };
+
+  const addTab = (code = BLANK_TEMPLATE, title = 'novo.portugol') => {
+    const newId = Math.random().toString(36).substr(2, 9);
+    setTabs(prev => [...prev, { id: newId, title, code, output: [], syntaxErrors: [], isRunning: false }]);
+    setActiveTabId(newId);
+  };
+
+  const closeTab = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (tabs.length === 1) return;
+    const newTabs = tabs.filter(t => t.id !== id);
+    setTabs(newTabs);
+    if (activeTabId === id) {
+      setActiveTabId(newTabs[newTabs.length - 1].id);
+    }
+  };
 
   useEffect(() => {
     const handleResize = () => {
@@ -56,45 +99,91 @@ export default function App() {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, [sidebarOpen]);
+
   const [inputRequest, setInputRequest] = useState<{ prompt: string; resolve: (val: string) => void } | null>(null);
   const [inputValue, setInputValue] = useState('');
   const [copied, setCopied] = useState(false);
 
   const interpreter = useRef(new PortugolInterpreter(
-    (text) => setOutput(prev => [...prev, text]),
+    (text) => setTabs(prev => prev.map(t => t.id === activeTabId ? { ...t, output: [...t.output, text] } : t)),
     (prompt) => new Promise((resolve) => setInputRequest({ prompt, resolve }))
   ));
 
+  useEffect(() => {
+    interpreter.current.setCallbacks(
+      (text) => setTabs(prev => prev.map(t => t.id === activeTabId ? { ...t, output: [...t.output, text] } : t)),
+      (prompt) => new Promise((resolve) => setInputRequest({ prompt, resolve }))
+    );
+  }, [activeTabId]);
+
   const handleRun = async () => {
-    setOutput([]);
-    setIsRunning(true);
+    setTabs(prev => prev.map(t => t.id === activeTabId ? { ...t, output: [], isRunning: true } : t));
     try {
-      await interpreter.current.run(code);
+      await interpreter.current.run(activeTab.code);
+      setTabs(prev => prev.map(t => t.id === activeTabId ? { ...t, isRunning: false } : t));
     } catch (error: any) {
-      setOutput(prev => [...prev, `[ERRO] ${error.message}`]);
+      setTabs(prev => prev.map(t => t.id === activeTabId ? { 
+        ...t, 
+        isRunning: false, 
+        output: [...t.output, `[ERRO] ${error.message}`] 
+      } : t));
     }
-    setIsRunning(false);
+  };
+
+  const handleStop = () => {
+    interpreter.current.stop();
+    setInputRequest(null);
+    setTabs(prev => prev.map(t => t.id === activeTabId ? { ...t, isRunning: false, output: [] } : t));
+  };
+
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      addTab(content, file.name);
+    };
+    reader.readAsText(file);
+    e.target.value = ''; // Reset for next upload
+  };
+
+  const startEditingTab = (id: string, title: string) => {
+    setEditingTabId(id);
+    setTempTabTitle(title);
+  };
+
+  const saveTabTitle = () => {
+    if (editingTabId && tempTabTitle.trim()) {
+      setTabs(prev => prev.map(t => t.id === editingTabId ? { ...t, title: tempTabTitle.trim() } : t));
+    }
+    setEditingTabId(null);
   };
 
   const handleDownload = () => {
-    const blob = new Blob([code], { type: 'text/plain' });
+    const blob = new Blob([activeTab.code], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'algoritmo.portugol';
+    a.download = activeTab.title;
     a.click();
     URL.revokeObjectURL(url);
   };
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(code);
+    navigator.clipboard.writeText(activeTab.code);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
   const handleFormat = () => {
-    const formatted = CodeFormatter.format(code);
-    setCode(formatted);
+    const formatted = CodeFormatter.format(activeTab.code);
+    updateActiveTab({ code: formatted });
   };
 
   const handleInputSubmit = (e: React.FormEvent) => {
@@ -183,7 +272,7 @@ export default function App() {
                       <button
                         key={ex.id}
                         onClick={() => {
-                          setCode(ex.code);
+                          updateActiveTab({ code: ex.code, output: [], title: ex.title + '.portugol' });
                           if (isMobile) setSidebarOpen(false);
                         }}
                         className="w-full text-left pl-12 pr-6 py-2 text-sm text-gray-500 hover:text-white hover:bg-white/5 transition-all flex items-center gap-2"
@@ -218,7 +307,58 @@ export default function App() {
               <BookOpen className="w-5 h-5" />
             </button>
             <div className="h-4 w-[1px] bg-white/10" />
-            <div className="text-[10px] md:text-xs font-mono text-gray-500 truncate max-w-[80px] md:max-w-none">editor.portugol</div>
+            
+            {/* Tabs */}
+            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar max-w-[200px] md:max-w-[500px]">
+              {tabs.map(tab => (
+                <div
+                  key={tab.id}
+                  onClick={() => setActiveTabId(tab.id)}
+                  onDoubleClick={() => startEditingTab(tab.id, tab.title)}
+                  className={cn(
+                    "flex items-center gap-2 px-3 py-1.5 rounded-t-lg text-[10px] md:text-xs font-medium transition-all cursor-pointer border-b-2 group",
+                    activeTabId === tab.id 
+                      ? "bg-white/5 text-white border-orange-500" 
+                      : "text-gray-500 hover:text-gray-300 border-transparent"
+                  )}
+                >
+                  {editingTabId === tab.id ? (
+                    <input
+                      autoFocus
+                      className="bg-black/40 border border-orange-500/50 rounded px-1 py-0.5 outline-none w-24 md:w-32"
+                      value={tempTabTitle}
+                      onChange={(e) => setTempTabTitle(e.target.value)}
+                      onBlur={saveTabTitle}
+                      onKeyDown={(e) => e.key === 'Enter' && saveTabTitle()}
+                    />
+                  ) : (
+                    <>
+                      <span className="truncate max-w-[80px] md:max-w-[120px]">{tab.title}</span>
+                      <Edit3 
+                        className="w-2.5 h-2.5 opacity-0 group-hover:opacity-50 hover:!opacity-100 transition-opacity" 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          startEditingTab(tab.id, tab.title);
+                        }}
+                      />
+                    </>
+                  )}
+                  {tabs.length > 1 && (
+                    <X 
+                      className="w-3 h-3 hover:text-red-500 transition-colors" 
+                      onClick={(e) => closeTab(tab.id, e)}
+                    />
+                  )}
+                </div>
+              ))}
+              <button 
+                onClick={() => addTab()}
+                className="p-1.5 text-gray-500 hover:text-white transition-colors"
+                title="Novo Arquivo"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           <div className="flex items-center gap-1 md:gap-3">
@@ -237,6 +377,20 @@ export default function App() {
               {copied ? <Check className="w-4 h-4 md:w-5 md:h-5 text-green-500" /> : <Copy className="w-4 h-4 md:w-5 md:h-5" />}
             </button>
             <button 
+              onClick={handleUploadClick}
+              className="p-1.5 md:p-2 text-gray-500 hover:text-white transition-colors"
+              title="Fazer Upload (.portugol)"
+            >
+              <Upload className="w-4 h-4 md:w-5 md:h-5" />
+            </button>
+            <input 
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileUpload}
+              accept=".portugol,.txt"
+              className="hidden"
+            />
+            <button 
               onClick={handleDownload}
               className="p-1.5 md:p-2 text-gray-500 hover:text-white transition-colors"
               title="Baixar Código"
@@ -244,53 +398,64 @@ export default function App() {
               <Download className="w-4 h-4 md:w-5 md:h-5" />
             </button>
             <div className="h-4 w-[1px] bg-white/10 mx-0.5 md:mx-1" />
-            <button 
-              onClick={handleRun}
-              disabled={isRunning}
-              className={cn(
-                "flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-1.5 rounded-full text-[10px] md:text-xs font-bold transition-all shadow-lg shadow-green-500/10",
-                isRunning ? "bg-gray-800 text-gray-500 cursor-not-allowed" : "bg-green-500 text-white hover:bg-green-400 active:scale-95"
-              )}
-            >
-              <Play className="w-3 h-3 md:w-3.5 md:h-3.5 fill-current" />
-              <span className="hidden sm:inline">EXECUTAR</span>
-              <span className="sm:hidden">RUN</span>
-            </button>
+            
+            {activeTab.isRunning ? (
+              <button 
+                onClick={handleStop}
+                className="flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-1.5 rounded-full text-[10px] md:text-xs font-bold transition-all bg-red-500 text-white hover:bg-red-400 active:scale-95 shadow-lg shadow-red-500/10"
+              >
+                <Square className="w-3 h-3 md:w-3.5 md:h-3.5 fill-current" />
+                <span>ENCERRAR</span>
+              </button>
+            ) : (
+              <button 
+                onClick={handleRun}
+                className="flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-1.5 rounded-full text-[10px] md:text-xs font-bold transition-all bg-green-500 text-white hover:bg-green-400 active:scale-95 shadow-lg shadow-green-500/10"
+              >
+                <Play className="w-3 h-3 md:w-3.5 md:h-3.5 fill-current" />
+                <span className="hidden sm:inline">EXECUTAR</span>
+                <span className="sm:hidden">RUN</span>
+              </button>
+            )}
           </div>
         </div>
 
         {/* Editor & Console Split */}
         <div className="flex-1 flex flex-col overflow-hidden p-2 md:p-4 gap-2 md:gap-4">
           <div className="flex-1 flex flex-col min-h-0 relative">
-            <CodeEditor code={code} onChange={setCode} syntaxErrors={syntaxErrors} />
+            <CodeEditor 
+              code={activeTab.code} 
+              onChange={(newCode) => updateActiveTab({ code: newCode })} 
+              syntaxErrors={activeTab.syntaxErrors} 
+            />
             
             {/* Syntax Errors Overlay */}
             <AnimatePresence>
-              {syntaxErrors.length > 0 && (
+              {activeTab.syntaxErrors.length > 0 && (
                 <motion.div 
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 10 }}
                   className={cn(
                     "absolute bottom-4 left-4 right-4 bg-[#1a1a1a]/95 border rounded-lg overflow-hidden backdrop-blur-md z-10 shadow-2xl transition-all duration-300",
-                    syntaxErrors.some(e => e.severity === 'error') ? "border-red-500/30" : "border-yellow-500/30",
+                    activeTab.syntaxErrors.some(e => e.severity === 'error') ? "border-red-500/30" : "border-yellow-500/30",
                     !showErrors ? "h-10" : "max-h-48"
                   )}
                 >
                   <div 
                     className={cn(
                       "flex items-center justify-between px-3 py-2 cursor-pointer select-none border-b border-white/5",
-                      syntaxErrors.some(e => e.severity === 'error') ? "bg-red-500/5" : "bg-yellow-500/5"
+                      activeTab.syntaxErrors.some(e => e.severity === 'error') ? "bg-red-500/5" : "bg-yellow-500/5"
                     )}
                     onClick={() => setShowErrors(!showErrors)}
                   >
                     <div className="flex items-center gap-2">
                       <AlertTriangle className={cn(
                         "w-3.5 h-3.5",
-                        syntaxErrors.some(e => e.severity === 'error') ? "text-red-500" : "text-yellow-500"
+                        activeTab.syntaxErrors.some(e => e.severity === 'error') ? "text-red-500" : "text-yellow-500"
                       )} />
                       <span className="text-[10px] font-bold uppercase tracking-widest text-gray-300">
-                        Problemas de Sintaxe ({syntaxErrors.length})
+                        Problemas de Sintaxe ({activeTab.syntaxErrors.length})
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -306,7 +471,7 @@ export default function App() {
                   
                   {showErrors && (
                     <div className="p-3 space-y-2 overflow-y-auto max-h-36 scrollbar-thin scrollbar-thumb-white/10">
-                      {syntaxErrors.map((err, i) => (
+                      {activeTab.syntaxErrors.map((err, i) => (
                         <div key={i} className="text-xs text-gray-300 flex gap-3 items-start group">
                           <span className={cn(
                             "font-mono font-bold px-1.5 py-0.5 rounded min-w-[65px] text-center text-[10px]",
@@ -332,16 +497,16 @@ export default function App() {
                 <span className="text-[9px] md:text-[10px] font-bold uppercase tracking-widest text-gray-500">Console de Saída</span>
               </div>
               <div className="flex-1 p-3 md:p-4 font-mono text-xs md:text-sm overflow-y-auto space-y-1 scrollbar-thin scrollbar-thumb-white/10">
-                {output.length === 0 && !isRunning && (
+                {activeTab.output.length === 0 && !activeTab.isRunning && (
                   <div className="text-gray-700 italic">Aguardando execução...</div>
                 )}
-                {output.map((line, i) => (
+                {activeTab.output.map((line, i) => (
                   <div key={i} className="text-green-400/90 leading-relaxed">
                     <span className="text-gray-600 mr-2">›</span>
                     {line}
                   </div>
                 ))}
-                {isRunning && (
+                {activeTab.isRunning && (
                   <motion.div 
                     animate={{ opacity: [0.4, 1, 0.4] }}
                     transition={{ repeat: Infinity, duration: 1.5 }}

@@ -6,6 +6,7 @@ export class PortugolInterpreter {
   private onOutput: (text: string) => void;
   private onInputRequired: (prompt: string) => Promise<string>;
   private lastEscrevaContent: string | null = null;
+  private stopExecution: boolean = false;
 
   constructor(
     onOutput: (text: string) => void,
@@ -27,9 +28,15 @@ export class PortugolInterpreter {
     };
   }
 
+  public setCallbacks(onOutput: (text: string) => void, onInputRequired: (prompt: string) => Promise<string>) {
+    this.onOutput = onOutput;
+    this.onInputRequired = onInputRequired;
+  }
+
   public async run(code: string) {
     this.state = this.resetState();
     this.lastEscrevaContent = null;
+    this.stopExecution = false;
     const lines = code.split('\n').map(l => l.trim());
     
     try {
@@ -40,9 +47,14 @@ export class PortugolInterpreter {
     }
   }
 
+  public stop() {
+    this.stopExecution = true;
+  }
+
   private async executeBlock(lines: string[]) {
     let i = 0;
     while (i < lines.length) {
+      if (this.stopExecution) throw new Error("Execução interrompida pelo usuário.");
       const line = lines[i].trim();
       if (!line || line.startsWith('//')) {
         i++;
@@ -137,6 +149,7 @@ export class PortugolInterpreter {
     const MAX_ITERATIONS = 10000;
 
     while (this.evaluateExpression(condition)) {
+      if (this.stopExecution) throw new Error("Execução interrompida pelo usuário.");
       if (safetyCounter++ > MAX_ITERATIONS) {
         throw new Error("Loop infinito detectado ou limite de execuções excedido.");
       }
@@ -165,6 +178,7 @@ export class PortugolInterpreter {
     if (!condition) throw new Error(`Sintaxe 'enquanto' de fechamento do 'faca' inválida na linha ${endIndex + 1}`);
 
     do {
+      if (this.stopExecution) throw new Error("Execução interrompida pelo usuário.");
       await this.executeBlock(block);
     } while (this.evaluateExpression(condition));
 
@@ -389,6 +403,7 @@ export class PortugolInterpreter {
     const { block, endIndex } = this.findLoopBlock(lines, startIndex, 'fimenquanto');
     
     while (this.evaluateExpression(condition)) {
+      if (this.stopExecution) throw new Error("Execução interrompida pelo usuário.");
       await this.executeBlock(block);
     }
 

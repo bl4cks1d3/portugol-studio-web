@@ -1,5 +1,5 @@
 
-import { GoogleGenAI } from "@google/genai";
+import OpenAI from "openai";
 
 const SYSTEM_INSTRUCTION = `
 Você é um especialista em Portugol para o sistema "Portugol Webstudio". 
@@ -70,30 +70,39 @@ Retorne APENAS o código do algoritmo, sem explicações adicionais ou blocos de
 `;
 
 export class AIService {
-  private ai: GoogleGenAI;
+  private groq: OpenAI;
 
   constructor() {
-    this.ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY as string });
+    this.groq = new OpenAI({
+      apiKey: process.env.GROQ_API_KEY || "",
+      dangerouslyAllowBrowser: true,
+      baseURL: "https://api.groq.com/openai/v1",
+    });
   }
 
   async generateAlgorithm(problem: string): Promise<string> {
     try {
-      const response = await this.ai.models.generateContent({
-        model: "gemini-3.1-pro-preview",
-        contents: [
-          { role: "user", parts: [{ text: problem }] }
+      if (!process.env.GROQ_API_KEY) {
+        throw new Error("Chave da API do Groq não configurada.");
+      }
+
+      const response = await this.groq.chat.completions.create({
+        model: "openai/gpt-oss-120b",
+        messages: [
+          { role: "system", content: SYSTEM_INSTRUCTION },
+          { role: "user", content: problem }
         ],
-        config: {
-          systemInstruction: SYSTEM_INSTRUCTION,
-          temperature: 0.2,
-        },
+        temperature: 0.2,
       });
 
-      const text = response.text || "";
-      // Remove possible markdown backticks if Gemini includes them
+      const text = response.choices[0]?.message?.content || "";
+      // Remove possible markdown backticks if AI includes them
       return text.replace(/```[a-zA-Z]*\n/g, '').replace(/```/g, '').trim();
-    } catch (error) {
-      console.error("Erro na geração por IA:", error);
+    } catch (error: any) {
+      console.error("Erro na geração por IA (Groq):", error);
+      if (error?.status === 401) {
+        throw new Error("Chave da API do Groq inválida.");
+      }
       throw new Error("Não foi possível gerar o código. Verifique sua conexão ou tente novamente mais tarde.");
     }
   }

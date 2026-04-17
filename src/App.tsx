@@ -30,7 +30,8 @@ import {
   Info,
   Home as HomeIcon,
   Save,
-  FileCode
+  FileCode,
+  Sparkles
 } from 'lucide-react';
 import { CodeEditor } from './components/Editor';
 import { PortugolInterpreter } from './interpreter/Interpreter';
@@ -38,6 +39,7 @@ import { SyntaxAnalyzer, SyntaxError } from './interpreter/SyntaxAnalyzer';
 import { CATEGORIZED_EXAMPLES, Example } from './constants';
 import { cn } from './lib/utils';
 import { Variable } from './types';
+import { aiService } from './services/aiService';
 import LZString from 'lz-string';
 import { PORTUGOL_DOCS } from './docs';
 
@@ -95,9 +97,24 @@ export default function App() {
   const [debugVariables, setDebugVariables] = useState<Map<string, Variable>>(new Map());
   const [stepResolver, setStepResolver] = useState<{ resolve: () => void } | null>(null);
 
+  // AI Generator State
+  const [isAIModalOpen, setIsAIModalOpen] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [aiError, setAiError] = useState('');
+
   useEffect(() => {
     const errors = SyntaxAnalyzer.analyze(activeTab.code);
     updateActiveTab({ syntaxErrors: errors });
+
+    // Sync title with algorithm name if it exists
+    const algoMatch = activeTab.code.match(/Algoritmo\s+([a-zA-Z0-9_]+)/i);
+    if (algoMatch && algoMatch[1]) {
+      const newTitle = algoMatch[1] + '.portugol';
+      if (activeTab.title !== newTitle) {
+        updateActiveTab({ title: newTitle });
+      }
+    }
   }, [activeTab.code, activeTabId]);
 
   const updateActiveTab = (updates: Partial<Tab>) => {
@@ -164,6 +181,7 @@ export default function App() {
 
   const interpreter = useRef(new PortugolInterpreter(
     (text) => setTabs(prev => prev.map(t => t.id === activeTabId ? { ...t, output: [...t.output, text] } : t)),
+    () => setTabs(prev => prev.map(t => t.id === activeTabId ? { ...t, output: [] } : t)),
     (prompt) => new Promise((resolve) => setInputRequest({ prompt, resolve })),
     onStep
   ));
@@ -171,6 +189,7 @@ export default function App() {
   useEffect(() => {
     interpreter.current.setCallbacks(
       (text) => setTabs(prev => prev.map(t => t.id === activeTabId ? { ...t, output: [...t.output, text] } : t)),
+      () => setTabs(prev => prev.map(t => t.id === activeTabId ? { ...t, output: [] } : t)),
       (prompt) => new Promise((resolve) => setInputRequest({ prompt, resolve })),
       onStep
     );
@@ -246,6 +265,29 @@ export default function App() {
       setTabs(prev => prev.map(t => t.id === editingTabId ? { ...t, title: tempTabTitle.trim() } : t));
     }
     setEditingTabId(null);
+  };
+
+  const handleGenerateAI = async () => {
+    if (!aiPrompt.trim()) return;
+    
+    setIsGeneratingAI(true);
+    setAiError('');
+    
+    try {
+      const generatedCode = await aiService.generateAlgorithm(aiPrompt);
+      // Extract algorithm name for the title
+      const algoMatch = generatedCode.match(/Algoritmo\s+([a-zA-Z0-9_]+)/i);
+      const title = algoMatch ? `${algoMatch[1]}.portugol` : 'ia_gerado.portugol';
+      
+      addTab(generatedCode, title);
+      setIsAIModalOpen(false);
+      setAiPrompt('');
+      setCurrentView('editor');
+    } catch (error: any) {
+      setAiError(error.message);
+    } finally {
+      setIsGeneratingAI(false);
+    }
   };
 
   const handleDownload = () => {
@@ -365,6 +407,16 @@ export default function App() {
           </button>
 
           <button 
+            onClick={() => setIsAIModalOpen(true)}
+            className="p-3 rounded-xl text-orange-500 hover:text-orange-400 hover:bg-orange-500/10 transition-all"
+            title="Gerador de Código IA"
+          >
+            <Sparkles className="w-6 h-6" />
+          </button>
+
+          <div className="h-[1px] bg-white/5 mx-2" />
+
+          <button 
             onClick={() => setCurrentView('examples')}
             className={cn("p-3 rounded-xl transition-all", currentView === 'examples' ? "bg-yellow-500/20 text-yellow-500" : "text-gray-500 hover:text-yellow-500 hover:bg-yellow-500/10")}
             title="Exemplos"
@@ -428,6 +480,20 @@ export default function App() {
               </div>
             ))}
             <button 
+              onClick={handleFormat}
+              className="p-2 text-gray-500 hover:text-white transition-colors"
+              title="Formatar Código (Auto-Identar)"
+            >
+              <AlignLeft className="w-4 h-4" />
+            </button>
+            <button 
+              onClick={() => setIsAIModalOpen(true)}
+              className="p-2 text-orange-500 hover:text-orange-400 transition-colors animate-pulse hover:animate-none"
+              title="Gerador de Algoritmo por IA"
+            >
+              <Sparkles className="w-4 h-4" />
+            </button>
+            <button 
               onClick={() => addTab()}
               className="p-2 text-gray-500 hover:text-white transition-colors"
               title="Novo Arquivo"
@@ -485,18 +551,23 @@ export default function App() {
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
-                className="absolute inset-0 bg-[#0f0f0f] p-8 overflow-y-auto"
+                className="absolute inset-0 bg-[#0f0f0f] p-4 md:p-8 overflow-y-auto"
               >
                 <div className="max-w-4xl mx-auto">
-                  <h2 className="text-3xl font-bold text-white mb-8 flex items-center gap-3">
+                  <h2 className="text-2xl md:text-3xl font-bold text-white mb-8 flex items-center gap-3">
                     <HelpCircle className="w-8 h-8 text-blue-400" />
-                    Entendendo a Sintaxe
+                    Documentação de Sintaxe
                   </h2>
-                  <div className="grid md:grid-cols-2 gap-6">
+                  <div className="space-y-4">
                     {PORTUGOL_DOCS.map((doc, i) => (
-                      <div key={i} className="bg-[#161616] border border-white/5 p-6 rounded-xl">
-                        <h3 className="text-lg font-bold text-orange-500 mb-3">{doc.title}</h3>
-                        <p className="text-sm text-gray-400 whitespace-pre-line leading-relaxed">{doc.content}</p>
+                      <div key={i} className="bg-[#161616] border border-white/5 p-6 rounded-xl hover:bg-[#1c1c1c] transition-colors group">
+                        <h3 className="text-lg font-bold text-orange-500 mb-3 flex items-center gap-2">
+                          <div className="w-1.5 h-6 bg-orange-500 rounded-full group-hover:h-8 transition-all" />
+                          {doc.title}
+                        </h3>
+                        <p className="text-sm text-gray-400 whitespace-pre-line leading-relaxed font-mono bg-black/30 p-4 rounded-lg border border-white/5">
+                          {doc.content}
+                        </p>
                       </div>
                     ))}
                   </div>
@@ -703,7 +774,7 @@ export default function App() {
                             <div className="text-gray-700 italic">Aguardando execução...</div>
                           )}
                           {activeTab.output.map((line, i) => (
-                            <div key={i} className="text-green-400/90 leading-relaxed">
+                            <div key={i} className="text-green-400/90 leading-relaxed whitespace-pre-wrap">
                               <span className="text-gray-600 mr-2">›</span>
                               {line}
                             </div>
@@ -727,27 +798,29 @@ export default function App() {
                         initial={{ y: 20, opacity: 0 }}
                         animate={{ y: 0, opacity: 1 }}
                         exit={{ y: 20, opacity: 0 }}
-                        className="w-full md:w-80 bg-orange-500/10 border border-orange-500/20 rounded-lg p-4 shadow-2xl shadow-orange-500/5 flex flex-col justify-center"
+                        className="w-full md:max-w-xl bg-orange-500/10 border border-orange-500/20 rounded-lg p-5 shadow-2xl shadow-orange-500/10 flex flex-col justify-center backdrop-blur-md"
                       >
-                        <div className="text-xs font-bold text-orange-500 uppercase mb-2 flex items-center gap-2">
-                          <HelpCircle className="w-3.5 h-3.5" />
-                          Entrada Necessária
+                        <div className="text-[10px] font-bold text-orange-500 uppercase mb-3 flex items-center gap-2 tracking-widest">
+                          <HelpCircle className="w-4 h-4" />
+                          ENTRADA DE DADOS
                         </div>
-                        <div className="text-sm text-gray-300 mb-3">{inputRequest.prompt}</div>
+                        <div className="text-sm font-mono text-gray-200 mb-4 whitespace-pre-line max-h-60 overflow-y-auto scrollbar-thin leading-relaxed">
+                          {inputRequest.prompt}
+                        </div>
                         <form onSubmit={handleInputSubmit} className="flex gap-2">
                           <input 
                             autoFocus
                             type="text" 
                             value={inputValue}
                             onChange={(e) => setInputValue(e.target.value)}
-                            className="flex-1 bg-black/40 border border-white/10 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-orange-500/50 transition-colors"
-                            placeholder="Digite aqui..."
+                            className="flex-1 bg-black/60 border border-white/10 rounded-md px-4 py-2 text-sm focus:outline-none focus:border-orange-500/50 transition-all font-mono"
+                            placeholder="Resposta..."
                           />
                           <button 
                             type="submit"
-                            className="bg-orange-500 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-orange-400 transition-colors"
+                            className="bg-orange-500 text-white px-6 py-2 rounded-md text-xs font-bold hover:bg-orange-400 transition-colors shadow-lg shadow-orange-500/20 active:scale-95 transform"
                           >
-                            OK
+                            ENVIAR
                           </button>
                         </form>
                       </motion.div>
@@ -767,6 +840,90 @@ export default function App() {
         accept=".portugol,.txt"
         className="hidden"
       />
+
+      {/* AI Generation Modal */}
+      <AnimatePresence>
+        {isAIModalOpen && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsAIModalOpen(false)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-md"
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="relative w-full max-w-lg bg-[#161616] border border-white/10 rounded-2xl shadow-2xl overflow-hidden"
+            >
+              <div className="p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 bg-orange-500/20 rounded-lg">
+                    <Sparkles className="w-6 h-6 text-orange-500" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-white leading-none mb-1">Gerador de Código IA</h3>
+                    <p className="text-xs text-gray-500">Transforme exercícios e problemas em Portugol oficial.</p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Descreva o problema ou cole a questão:</label>
+                    <textarea 
+                      autoFocus
+                      value={aiPrompt}
+                      onChange={(e) => setAiPrompt(e.target.value)}
+                      placeholder="Ex: Faça um algoritmo que receba dois números e mostre o maior deles."
+                      className="w-full h-40 bg-black/40 border border-white/10 rounded-lg p-4 text-sm text-gray-200 focus:outline-none focus:border-orange-500/50 transition-all resize-none font-sans"
+                      spellCheck="true"
+                      lang="pt-BR"
+                    />
+                  </div>
+
+                  {aiError && (
+                    <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-xs text-red-500 text-center">
+                      {aiError}
+                    </div>
+                  )}
+
+                  <div className="flex gap-3 pt-2">
+                    <button 
+                      onClick={() => setIsAIModalOpen(false)}
+                      className="flex-1 px-4 py-3 rounded-xl bg-white/5 text-gray-300 text-sm font-bold hover:bg-white/10 transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                    <button 
+                      onClick={handleGenerateAI}
+                      disabled={isGeneratingAI || !aiPrompt.trim()}
+                      className="flex-[2] px-4 py-3 rounded-xl bg-orange-500 text-white text-sm font-bold hover:bg-orange-400 transition-all shadow-lg shadow-orange-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      {isGeneratingAI ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                          Processando...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-4 h-4" />
+                          Gerar Algoritmo
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-black/40 border-t border-white/5 p-4">
+                <p className="text-[10px] text-gray-600 text-center uppercase tracking-tighter">Powered by Gemini 3.1 Pro • Desenvolvido para Portugol Webstudio</p>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -8,14 +8,14 @@ export interface SyntaxError {
 export class SyntaxAnalyzer {
   private static readonly KEYWORDS: Set<string> = new Set([
     'algoritmo', 'fimalgoritmo', 'declare', 'inteiro', 'real', 'literal', 'logico',
-    'escreva', 'leia', 'se', 'entao', 'senao', 'fimse', 'enquanto', 'fimenquanto',
+    'escreva', 'leia', 'limpa', 'se', 'entao', 'senao', 'fimse', 'enquanto', 'fimenquanto',
     'para', 'fimpara', 'faca', 'escolha', 'caso', 'contrario', 'fimescolha', 'verdadeiro', 'falso',
     'resto', 'raizquadrada', 'potencia', 'abs', 'trunca', 'seno', 'sen', 'cosseno', 'tangente'
   ]);
 
   private static getIdentifiers(expr: string): string[] {
-    // Remove string literals
-    const noStrings = expr.replace(/"[^"]*"|'[^']*'/g, ' ');
+    // Remove string literals and then remove literal \n tokens
+    const noStrings = expr.replace(/"[^"]*"|'[^']*'/g, ' ').replace(/\\n/g, ' ');
     // Match identifiers (words starting with letter/underscore)
     const matches = (noStrings.match(/\b[a-zA-Z_][a-zA-Z0-9_]*\b/g) || []) as string[];
     return matches.filter(id => !SyntaxAnalyzer.KEYWORDS.has(id.toLowerCase()) && isNaN(Number(id)));
@@ -45,12 +45,41 @@ export class SyntaxAnalyzer {
       }
     });
 
+    let globalParenBalance = 0;
     lines.forEach((line, index) => {
       const lineNumber = index + 1;
       const lineWithoutComment = line.split('//')[0].trim();
       if (!lineWithoutComment) return;
 
       const lowerLine = lineWithoutComment.toLowerCase();
+
+      // Parentheses balance tracking (moved up to handle multi-line)
+      let currentLineOpenParen = 0;
+      let currentLineCloseParen = 0;
+      let inQuotes = false;
+      let quoteChar = '';
+      
+      for (let i = 0; i < lineWithoutComment.length; i++) {
+        const char = lineWithoutComment[i];
+        if ((char === '"' || char === "'") && (i === 0 || lineWithoutComment[i-1] !== '\\')) {
+          if (!inQuotes) {
+            inQuotes = true;
+            quoteChar = char;
+          } else if (char === quoteChar) {
+            inQuotes = false;
+          }
+        }
+        if (!inQuotes) {
+          if (char === '(') {
+            currentLineOpenParen++;
+            globalParenBalance++;
+          }
+          if (char === ')') {
+            currentLineCloseParen++;
+            globalParenBalance--;
+          }
+        }
+      }
 
       // Basic structure checks
       if (lowerLine.startsWith('algoritmo')) {
@@ -208,17 +237,15 @@ export class SyntaxAnalyzer {
                             lowerLine.startsWith('escreva(') ||
                             lowerLine.startsWith('leia(');
 
-      if (needsSemicolon && !lineWithoutComment.endsWith(';')) {
+      // Only warn about semicolon if parentheses are balanced (not in the middle of a command)
+      if (needsSemicolon && !lineWithoutComment.endsWith(';') && globalParenBalance === 0) {
         errors.push({ line: lineNumber, message: "Faltando ';' ao final da instrução", severity: 'warning' });
       }
-      
-      // Parentheses balance
-      const openParen = (lineWithoutComment.match(/\(/g) || []).length;
-      const closeParen = (lineWithoutComment.match(/\)/g) || []).length;
-      if (openParen !== closeParen) {
-        errors.push({ line: lineNumber, message: "Parênteses não balanceados", severity: 'error' });
-      }
     });
+
+    if (globalParenBalance !== 0) {
+      errors.push({ line: lines.length, message: "Parênteses não balanceados no código", severity: 'error' });
+    }
 
     if (!hasAlgoritmo) {
       errors.push({ line: 1, message: "O algoritmo deve começar com 'Algoritmo Nome()'", severity: 'error' });

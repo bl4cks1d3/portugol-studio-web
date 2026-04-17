@@ -4,6 +4,7 @@ import { DataType, Variable, InterpreterState } from '../types';
 export class PortugolInterpreter {
   private state: InterpreterState;
   private onOutput: (text: string) => void;
+  private onClearOutput: () => void;
   private onInputRequired: (prompt: string) => Promise<string>;
   private onStep?: (line: number, variables: Map<string, Variable>) => Promise<void>;
   private lastEscrevaContent: string | null = null;
@@ -12,10 +13,12 @@ export class PortugolInterpreter {
 
   constructor(
     onOutput: (text: string) => void,
+    onClearOutput: () => void,
     onInputRequired: (prompt: string) => Promise<string>,
     onStep?: (line: number, variables: Map<string, Variable>) => Promise<void>
   ) {
     this.onOutput = onOutput;
+    this.onClearOutput = onClearOutput;
     this.onInputRequired = onInputRequired;
     this.onStep = onStep;
     this.state = this.resetState();
@@ -34,10 +37,12 @@ export class PortugolInterpreter {
 
   public setCallbacks(
     onOutput: (text: string) => void, 
+    onClearOutput: () => void,
     onInputRequired: (prompt: string) => Promise<string>,
     onStep?: (line: number, variables: Map<string, Variable>) => Promise<void>
   ) {
     this.onOutput = onOutput;
+    this.onClearOutput = onClearOutput;
     this.onInputRequired = onInputRequired;
     this.onStep = onStep;
   }
@@ -67,12 +72,39 @@ export class PortugolInterpreter {
       if (this.stopExecution) throw new Error("Execução interrompida pelo usuário.");
       
       const absoluteLine = offset + i;
-      const line = lines[i].trim();
+      let line = lines[i].trim();
       
       if (!line || line.startsWith('//')) {
         i++;
         continue;
       }
+
+      // Handle multi-line statements by joining lines until parentheses are balanced
+      let fullLine = line;
+      let j = i;
+      let balance = this.countParenBalance(fullLine);
+      
+      // If we have an open parenthesis, keep adding lines until it's closed or we hit a block keyword
+      while (balance > 0 && j + 1 < lines.length) {
+        j++;
+        const nextLine = lines[j].trim();
+        if (!nextLine || nextLine.startsWith('//')) continue;
+        
+        // Stop if we hit a keyword that definitely starts a new block
+        const lowerNext = nextLine.toLowerCase();
+        if (lowerNext.startsWith('se ') || lowerNext.startsWith('enquanto') || 
+            lowerNext.startsWith('para') || lowerNext.startsWith('fimalgoritmo') ||
+            lowerNext.startsWith('fimse') || lowerNext.startsWith('fimenquanto') ||
+            lowerNext.startsWith('fimpara')) {
+          break;
+        }
+
+        fullLine += " " + nextLine;
+        balance = this.countParenBalance(fullLine);
+      }
+      
+      i = j; // Advance main loop index
+      const command = fullLine;
 
       // Debug step
       if (this.isDebugging && this.onStep) {
@@ -81,19 +113,22 @@ export class PortugolInterpreter {
       }
 
       try {
-        const lowerLine = line.toLowerCase();
+        const lowerLine = command.toLowerCase();
         if (lowerLine.startsWith('algoritmo')) {
           // Skip header
         } else if (lowerLine.startsWith('fimalgoritmo')) {
           break;
         } else if (lowerLine.startsWith('declare')) {
-          this.handleDeclaration(line);
+          this.handleDeclaration(command);
+        } else if (lowerLine.startsWith('limpa()') || lowerLine.startsWith('limpa();')) {
+          this.state.output = [];
+          this.onClearOutput();
         } else if (lowerLine.startsWith('escreva')) {
-          this.handleEscreva(line);
+          this.handleEscreva(command);
         } else if (lowerLine.startsWith('leia')) {
-          await this.handleLeia(line);
+          await this.handleLeia(command);
         } else if (lowerLine.startsWith('se')) {
-          const { nextIndex } = await this.handleSe(lines, i, offset);
+          const { nextIndex } = await this.handleSe(lines, i, offset); // handleSe/loops still use lines/i for block finding
           i = nextIndex;
           continue;
         } else if (lowerLine.startsWith('enquanto')) {
@@ -112,8 +147,8 @@ export class PortugolInterpreter {
           const { nextIndex } = await this.handleEscolha(lines, i, offset);
           i = nextIndex;
           continue;
-        } else if (line.includes('<-') || line.includes('++') || line.includes('--')) {
-          this.handleAssignment(line);
+        } else if (command.includes('<-') || command.includes('++') || command.includes('--')) {
+          this.handleAssignment(command);
         }
       } catch (error: any) {
         throw new Error(`Erro na linha ${absoluteLine + 1}: ${error.message}`);
@@ -121,6 +156,30 @@ export class PortugolInterpreter {
       
       i++;
     }
+  }
+
+  private countParenBalance(text: string): number {
+    let balance = 0;
+    let inQuotes = false;
+    let quoteChar = '';
+    
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      if ((char === '"' || char === "'") && (i === 0 || text[i-1] !== '\\')) {
+        if (!inQuotes) {
+          inQuotes = true;
+          quoteChar = char;
+        } else if (char === quoteChar) {
+          inQuotes = false;
+        }
+      }
+      
+      if (!inQuotes) {
+        if (char === '(') balance++;
+        if (char === ')') balance--;
+      }
+    }
+    return balance;
   }
 
   private async handlePara(lines: string[], startIndex: number, offset: number): Promise<{ nextIndex: number }> {
@@ -140,7 +199,8 @@ export class PortugolInterpreter {
     }
 
     // Alternative syntax: para i <- 1 ate 10 passo 1 faca
-    const altMatch = line.match(/para\s+(\w+)\s*<-\s*([^ ]+)\s+ate\s+([^ ]+)(?:\s+passo\s+([^ ]+))?/i);
+    const altRegex = /para\s+(\w+)\s*<-\s*([^ ]+)\s+ate\s+([^ ]+)(?:\s+passo\s+([^ ]+))?/i;
+    const altMatch = line.match(altRegex);
     if (altMatch) {
       const varName = altMatch[1];
       const startVal = altMatch[2];
@@ -346,15 +406,26 @@ export class PortugolInterpreter {
 
   private handleEscreva(line: string) {
     // escreva("A área é:", area);
-    const content = line.match(/escreva\((.*)\);?/i)?.[1];
-    if (!content) return;
+    const contentMatch = line.match(/escreva\((.*)\);?/i);
+    if (!contentMatch) return;
+    
+    let content = contentMatch[1];
+    
+    // Support "Line 1"\n "Line 2" by transforming it into "Line 1" "\n" "Line 2"
+    // This allows the existing concatenation logic to merge them into "Line 1\nLine 2"
+    content = content
+      .replace(/("\s*)\\n(\s*")/g, '" "\\n" "')
+      .replace(/('\s*)\\n(\s*')/g, "' '\\n' '");
 
     const parts = this.splitArgs(content);
     const output = parts.map(p => {
-      if (p.startsWith('"') || p.startsWith("'")) {
-        return p.slice(1, -1);
+      // Handle implicit string concatenation (e.g. "A" "B" -> "AB")
+      const concatenated = p.replace(/"\s*"/g, '').replace(/'\s*'/g, '');
+      
+      if (concatenated.startsWith('"') || concatenated.startsWith("'")) {
+        return concatenated.slice(1, -1).replace(/\\n/g, '\n');
       }
-      return this.evaluateExpression(p);
+      return this.evaluateExpression(concatenated);
     }).join(' ');
     
     this.onOutput(output);

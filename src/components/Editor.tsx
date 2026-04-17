@@ -47,12 +47,20 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ code, onChange, syntaxEr
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter') {
-      const textarea = e.currentTarget;
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      const value = textarea.value;
+    const textarea = e.currentTarget;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const value = textarea.value;
 
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const newValue = value.substring(0, start) + '  ' + value.substring(end);
+      onChange(newValue);
+      setTimeout(() => {
+        textarea.selectionStart = textarea.selectionEnd = start + 2;
+      }, 0);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
       // Find the start of the current line
       const lineStart = value.lastIndexOf('\n', start - 1) + 1;
       const currentLine = value.substring(lineStart, start);
@@ -71,7 +79,8 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ code, onChange, syntaxEr
         trimmedLine.startsWith('escolha') || 
         trimmedLine.startsWith('caso') || 
         trimmedLine.startsWith('senao') ||
-        trimmedLine.startsWith('algoritmo');
+        trimmedLine.startsWith('algoritmo') ||
+        trimmedLine.startsWith('declare');
 
       if (opensBlock) {
         indentation += '  ';
@@ -79,15 +88,12 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ code, onChange, syntaxEr
 
       // Insert newline + indentation
       const newValue = value.substring(0, start) + '\n' + indentation + value.substring(end);
-      
       onChange(newValue);
 
       // Set cursor position
       setTimeout(() => {
         textarea.selectionStart = textarea.selectionEnd = start + 1 + indentation.length;
       }, 0);
-
-      e.preventDefault();
     }
   };
 

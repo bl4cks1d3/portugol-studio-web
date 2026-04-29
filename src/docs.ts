@@ -10,7 +10,7 @@ export const PORTUGOL_DOCS = [
   },
   {
     title: "Comandos de Entrada e Saída",
-    content: "- escreva(valor): Exibe um valor no console. Suporta quebra de linha com \\n.\n- leia(variavel): Lê um valor digitado pelo usuário.\n- limpa(): Limpa todo o conteúdo do console de saída."
+    content: "- escreva(valor): Exibe um valor no console. Suporta quebra de linha com \\n.\n- leia(variavel): Lê um valor digitado pelo usuário."
   },
   {
     title: "Operadores Aritméticos",

@@ -21,7 +21,6 @@ fimalgoritmo
 - Atribuição: variavel <- expressao
 - Entrada: leia(variavel)
 - Saída: escreva("texto", variavel)
-- Limpar Console: limpa()
 - Quebra de linha em strings: use \\n dentro das aspas ou entre aspas adjacentes.
 
 4. ESTRUTURAS DE CONTROLE:

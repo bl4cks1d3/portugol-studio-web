@@ -120,9 +120,6 @@ export class PortugolInterpreter {
           break;
         } else if (lowerLine.startsWith('declare')) {
           this.handleDeclaration(command);
-        } else if (lowerLine.startsWith('limpa()') || lowerLine.startsWith('limpa();')) {
-          this.state.output = [];
-          this.onClearOutput();
         } else if (lowerLine.startsWith('escreva')) {
           this.handleEscreva(command);
         } else if (lowerLine.startsWith('leia')) {
@@ -241,7 +238,9 @@ export class PortugolInterpreter {
         const varName = init.split('<-')[0].trim();
         const newVal = this.evaluateExpression(increment);
         const variable = this.state.variables.get(varName);
-        if (variable) variable.value = newVal;
+        if (variable) {
+          variable.value = this.enforceType(newVal, variable.type);
+        }
       }
     }
 
@@ -395,12 +394,14 @@ export class PortugolInterpreter {
       const variable = this.state.variables.get(name);
       if (!variable) throw new Error(`Variável não declarada: ${name}`);
       
-      if (idx2 !== null) variable.value[idx1][idx2] = value;
-      else variable.value[idx1] = value;
+      const finalValue = this.enforceType(value, variable.type);
+
+      if (idx2 !== null) variable.value[idx1][idx2] = finalValue;
+      else variable.value[idx1] = finalValue;
     } else {
       const variable = this.state.variables.get(target);
       if (!variable) throw new Error(`Variável não declarada: ${target}`);
-      variable.value = value;
+      variable.value = this.enforceType(value, variable.type);
     }
   }
 
@@ -457,10 +458,7 @@ export class PortugolInterpreter {
       const variable = this.state.variables.get(name);
       if (!variable) throw new Error(`Variável não declarada: ${name}`);
       
-      let finalValue: any = input;
-      if (variable.type === 'inteiro') finalValue = parseInt(input);
-      else if (variable.type === 'real') finalValue = parseFloat(input);
-      else if (variable.type === 'logico') finalValue = input.toLowerCase() === 'verdadeiro' || input.toLowerCase() === 'v';
+      const finalValue = this.enforceType(input, variable.type);
 
       if (idx2 !== null) variable.value[idx1][idx2] = finalValue;
       else variable.value[idx1] = finalValue;
@@ -468,10 +466,7 @@ export class PortugolInterpreter {
       const variable = this.state.variables.get(varNameRaw);
       if (!variable) throw new Error(`Variável não declarada: ${varNameRaw}`);
 
-      if (variable.type === 'inteiro') variable.value = parseInt(input);
-      else if (variable.type === 'real') variable.value = parseFloat(input);
-      else if (variable.type === 'logico') variable.value = input.toLowerCase() === 'verdadeiro' || input.toLowerCase() === 'v';
-      else variable.value = input;
+      variable.value = this.enforceType(input, variable.type);
     }
   }
 
@@ -570,7 +565,7 @@ export class PortugolInterpreter {
         .replace(/cosseno\((.+?)\)/gi, 'Math.cos($1)')
         .replace(/tangente\((.+?)\)/gi, 'Math.tan($1)')
         .replace(/abs\((.+?)\)/gi, 'Math.abs($1)')
-        .replace(/trunca\((.+?)\)/gi, 'Math.floor($1)');
+        .replace(/trunca\((.+?)\)/gi, 'Math.trunc($1)');
     } while (processed !== previous);
     
     try {
@@ -650,5 +645,25 @@ export class PortugolInterpreter {
       i++;
     }
     return { block, endIndex: i };
+  }
+
+  private enforceType(value: any, type: DataType): any {
+    if (type === 'inteiro') {
+      const num = Number(value);
+      return isNaN(num) ? 0 : Math.trunc(num);
+    }
+    if (type === 'real') {
+      const num = Number(typeof value === 'string' ? value.replace(',', '.') : value);
+      return isNaN(num) ? 0 : num;
+    }
+    if (type === 'logico') {
+      if (typeof value === 'boolean') return value;
+      const s = String(value).toLowerCase();
+      return s === 'verdadeiro' || s === 'v' || s === 'true';
+    }
+    if (type === 'literal') {
+      return String(value);
+    }
+    return value;
   }
 }

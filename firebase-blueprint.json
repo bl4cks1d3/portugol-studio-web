@@ -26,9 +26,23 @@
         "difficulty": { "type": "string", "enum": ["easy", "medium", "hard"] }
       },
       "required": ["title", "description", "initialCode"]
+    },
+    "SharedCode": {
+      "title": "SharedCode",
+      "description": "Portuguol code shared via a link",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["code", "createdAt"]
     }
   },
   "firestore": {
+    "/shared_codes/{codeId}": {
+      "schema": "SharedCode",
+      "description": "Stored code for shortened share links"
+    },
     "/examples/{exampleId}": {
       "schema": "Example",
       "description": "Collection of Portugol examples"

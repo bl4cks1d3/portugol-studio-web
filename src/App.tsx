@@ -42,6 +42,14 @@ import { Variable } from './types';
 import { aiService } from './services/aiService';
 import LZString from 'lz-string';
 import { PORTUGOL_DOCS } from './docs';
+import { 
+  collection, 
+  addDoc, 
+  getDoc, 
+  doc, 
+  serverTimestamp 
+} from 'firebase/firestore';
+import { db } from './firebase';
 
 const Logo = ({ className = "w-12 h-12" }: { className?: string }) => (
   <div className={cn("flex items-center justify-center bg-orange-500 rounded-lg font-black text-white select-none", className)}>
@@ -155,20 +163,40 @@ export default function App() {
 
   // Load shared code from URL
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const sharedCode = params.get('code');
-    if (sharedCode) {
-      try {
-        const decompressed = LZString.decompressFromEncodedURIComponent(sharedCode);
-        if (decompressed) {
-          addTab(decompressed, 'compartilhado.portugol');
-          // Clear URL without reloading
-          window.history.replaceState({}, '', window.location.pathname);
+    const handleSharedUrl = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const sharedCode = params.get('code');
+      const shortId = params.get('s');
+
+      if (sharedCode) {
+        try {
+          const decompressed = LZString.decompressFromEncodedURIComponent(sharedCode);
+          if (decompressed) {
+            addTab(decompressed, 'compartilhado.portugol');
+          }
+        } catch (e) {
+          console.error('Erro ao carregar código compartilhado:', e);
         }
-      } catch (e) {
-        console.error('Erro ao carregar código compartilhado:', e);
+      } else if (shortId) {
+        try {
+          const docRef = doc(db, 'shared_codes', shortId);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            addTab(data.code, 'compartilhado.portugol');
+          }
+        } catch (e) {
+          console.error('Erro ao buscar código encurtado:', e);
+        }
       }
-    }
+
+      if (sharedCode || shortId) {
+        // Clear URL without reloading
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+    };
+
+    handleSharedUrl();
   }, []);
 
   const onStep = (line: number, variables: Map<string, Variable>) => {
@@ -300,14 +328,30 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
-  const handleShare = () => {
-    const compressed = LZString.compressToEncodedURIComponent(activeTab.code);
-    const shareUrl = `${window.location.origin}${window.location.pathname}?code=${compressed}`;
-    
-    navigator.clipboard.writeText(shareUrl).then(() => {
-      setShared(true);
-      setTimeout(() => setShared(false), 2000);
-    });
+  const handleShare = async () => {
+    try {
+      // Save to Firestore for shortening
+      const docRef = await addDoc(collection(db, 'shared_codes'), {
+        code: activeTab.code,
+        createdAt: serverTimestamp()
+      });
+      
+      const shareUrl = `${window.location.origin}${window.location.pathname}?s=${docRef.id}`;
+      
+      navigator.clipboard.writeText(shareUrl).then(() => {
+        setShared(true);
+        setTimeout(() => setShared(false), 3000);
+      });
+    } catch (e) {
+      console.error('Erro ao encurtar link:', e);
+      // Fallback to compressed URL if Firestore fails
+      const compressed = LZString.compressToEncodedURIComponent(activeTab.code);
+      const shareUrl = `${window.location.origin}${window.location.pathname}?code=${compressed}`;
+      navigator.clipboard.writeText(shareUrl).then(() => {
+        setShared(true);
+        setTimeout(() => setShared(false), 3000);
+      });
+    }
   };
 
   const handleCopy = () => {
@@ -389,6 +433,14 @@ export default function App() {
           </button>
 
           <div className="h-[1px] bg-white/5 mx-2" />
+
+          <button 
+            onClick={handleCopy}
+            className="p-3 rounded-xl text-gray-500 hover:text-blue-400 hover:bg-blue-400/10 transition-all"
+            title="Copiar Código"
+          >
+            <Copy className="w-6 h-6" />
+          </button>
 
           <button 
             onClick={handleDownload}
@@ -840,6 +892,20 @@ export default function App() {
         accept=".portugol,.txt"
         className="hidden"
       />
+
+      <AnimatePresence>
+        {(copied || shared) && (
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] bg-orange-500 text-white px-6 py-3 rounded-full shadow-2xl font-bold flex items-center gap-2"
+          >
+            <Check className="w-5 h-5" />
+            {shared ? "Link de compartilhamento copiado!" : "Código copiado para a área de transferência!"}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* AI Generation Modal */}
       <AnimatePresence>

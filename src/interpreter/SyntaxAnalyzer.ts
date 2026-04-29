@@ -8,7 +8,7 @@ export interface SyntaxError {
 export class SyntaxAnalyzer {
   private static readonly KEYWORDS: Set<string> = new Set([
     'algoritmo', 'fimalgoritmo', 'declare', 'inteiro', 'real', 'literal', 'logico',
-    'escreva', 'leia', 'limpa', 'se', 'entao', 'senao', 'fimse', 'enquanto', 'fimenquanto',
+    'escreva', 'leia', 'se', 'entao', 'senao', 'fimse', 'enquanto', 'fimenquanto',
     'para', 'fimpara', 'faca', 'escolha', 'caso', 'contrario', 'fimescolha', 'verdadeiro', 'falso',
     'resto', 'raizquadrada', 'potencia', 'abs', 'trunca', 'seno', 'sen', 'cosseno', 'tangente'
   ]);

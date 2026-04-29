@@ -543,6 +543,8 @@ export class PortugolInterpreter {
 
     // Handle Portugol specific operators and functions with a loop to support nesting
     processed = processed
+      .replace(/\bverdadeiro\b/gi, 'true')
+      .replace(/\bfalso\b/gi, 'false')
       .replace(/\s+e\s+/gi, ' && ')
       .replace(/\s+ou\s+/gi, ' || ')
       .replace(/\s+nao\s+/gi, ' ! ')
